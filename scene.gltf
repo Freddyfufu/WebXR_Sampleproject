@@ -1,0 +1,350 @@
+{
+  "accessors": [
+    {
+      "bufferView": 2,
+      "componentType": 5126,
+      "count": 65532,
+      "max": [
+        0.47062700986862183,
+        4.5376830101013184,
+        0.089387997984886169
+      ],
+      "min": [
+        0.35024300217628479,
+        4.4042420387268066,
+        -0.044822998344898224
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 2,
+      "byteOffset": 786384,
+      "componentType": 5126,
+      "count": 65532,
+      "max": [
+        0.99999707937240601,
+        0.99996763467788696,
+        0.99999988079071045
+      ],
+      "min": [
+        -0.99997609853744507,
+        -0.99985253810882568,
+        -0.9998781681060791
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 3,
+      "componentType": 5126,
+      "count": 65532,
+      "max": [
+        0.80784314870834351,
+        0.7764706015586853,
+        0.77254903316497803,
+        1
+      ],
+      "min": [
+        0.058823529630899429,
+        0.054901961237192154,
+        0.054901961237192154,
+        1
+      ],
+      "type": "VEC4"
+    },
+    {
+      "bufferView": 1,
+      "componentType": 5126,
+      "count": 65532,
+      "max": [
+        0.99882197380065918,
+        1
+      ],
+      "min": [
+        0,
+        0
+      ],
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 0,
+      "componentType": 5125,
+      "count": 372792,
+      "max": [
+        65531
+      ],
+      "min": [
+        0
+      ],
+      "type": "SCALAR"
+    },
+    {
+      "bufferView": 2,
+      "byteOffset": 1572768,
+      "componentType": 5126,
+      "count": 32583,
+      "max": [
+        0.46862000226974487,
+        4.4887490272521973,
+        0.07779800146818161
+      ],
+      "min": [
+        0.34885498881340027,
+        4.3997049331665039,
+        -0.047233998775482178
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 2,
+      "byteOffset": 1963764,
+      "componentType": 5126,
+      "count": 32583,
+      "max": [
+        0.99970376491546631,
+        0.99983620643615723,
+        0.9998055100440979
+      ],
+      "min": [
+        -0.99997609853744507,
+        -0.9999726414680481,
+        -0.99997633695602417
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 3,
+      "byteOffset": 1048512,
+      "componentType": 5126,
+      "count": 32583,
+      "max": [
+        0.81568628549575806,
+        0.69019609689712524,
+        0.41960784792900085,
+        1
+      ],
+      "min": [
+        0.058823529630899429,
+        0.054901961237192154,
+        0.054901961237192154,
+        1
+      ],
+      "type": "VEC4"
+    },
+    {
+      "bufferView": 1,
+      "byteOffset": 524256,
+      "componentType": 5126,
+      "count": 32583,
+      "max": [
+        0.94005399942398071,
+        0.99918699264526367
+      ],
+      "min": [
+        0,
+        0
+      ],
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 0,
+      "byteOffset": 1491168,
+      "componentType": 5125,
+      "count": 167202,
+      "max": [
+        32582
+      ],
+      "min": [
+        0
+      ],
+      "type": "SCALAR"
+    }
+  ],
+  "asset": {
+    "extras": {
+      "author": "Archaeological museum (https://sketchfab.com/archmsfbsu)",
+      "license": "CC0-1.0 (http://creativecommons.org/publicdomain/zero/1.0/)",
+      "source": "https://sketchfab.com/3d-models/no16-130b317ece9e4fa5a92e943112f0990d",
+      "title": "Бусина №16"
+    },
+    "generator": "Sketchfab-8.42.0",
+    "version": "2.0"
+  },
+  "bufferViews": [
+    {
+      "buffer": 0,
+      "byteLength": 2159976,
+      "byteOffset": 0,
+      "name": "floatBufferViews",
+      "target": 34963
+    },
+    {
+      "buffer": 0,
+      "byteLength": 784920,
+      "byteOffset": 2159976,
+      "byteStride": 8,
+      "name": "floatBufferViews",
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 2354760,
+      "byteOffset": 2944896,
+      "byteStride": 12,
+      "name": "floatBufferViews",
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 1569840,
+      "byteOffset": 5299656,
+      "byteStride": 16,
+      "name": "floatBufferViews",
+      "target": 34962
+    }
+  ],
+  "buffers": [
+    {
+      "byteLength": 6869496,
+      "uri": "scene.bin"
+    }
+  ],
+  "images": [
+    {
+      "uri": "textures/Bs_17_baseColor.jpeg"
+    }
+  ],
+  "materials": [
+    {
+      "doubleSided": true,
+      "emissiveFactor": [
+        0,
+        0,
+        0
+      ],
+      "name": "Bs_17",
+      "pbrMetallicRoughness": {
+        "baseColorFactor": [
+          1,
+          1,
+          1,
+          1
+        ],
+        "baseColorTexture": {
+          "index": 0,
+          "texCoord": 0
+        },
+        "metallicFactor": 0,
+        "roughnessFactor": 0
+      }
+    }
+  ],
+  "meshes": [
+    {
+      "primitives": [
+        {
+          "attributes": {
+            "COLOR_0": 2,
+            "NORMAL": 1,
+            "POSITION": 0,
+            "TEXCOORD_0": 3
+          },
+          "indices": 4,
+          "material": 0,
+          "mode": 4
+        }
+      ]
+    },
+    {
+      "primitives": [
+        {
+          "attributes": {
+            "COLOR_0": 7,
+            "NORMAL": 6,
+            "POSITION": 5,
+            "TEXCOORD_0": 8
+          },
+          "indices": 9,
+          "material": 0,
+          "mode": 4
+        }
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "children": [
+        1
+      ],
+      "name": "RootNode (gltf orientation matrix)",
+      "rotation": [
+        -0.70710678118654746,
+        -0,
+        -0,
+        0.70710678118654757
+      ]
+    },
+    {
+      "children": [
+        2
+      ],
+      "matrix": [
+        9.284244530169417,
+        -6.5886514491112393,
+        7.7270597281617484,
+        0,
+        3.0114028319154613,
+        11.785267113973077,
+        6.4307013650677618,
+        0,
+        -9.6978986402782539,
+        -2.6480444847207991,
+        9.3943395014166526,
+        0,
+        -0.82992297410964966,
+        0.84134739637374878,
+        -2.3119769096374512,
+        1
+      ],
+      "name": "RootNode (model correction matrix)"
+    },
+    {
+      "children": [
+        3,
+        4
+      ],
+      "name": "Bs_17.obj.cleaner.materialmerger.gles"
+    },
+    {
+      "mesh": 0,
+      "name": ""
+    },
+    {
+      "mesh": 1,
+      "name": ""
+    }
+  ],
+  "samplers": [
+    {
+      "magFilter": 9729,
+      "minFilter": 9987,
+      "wrapS": 10497,
+      "wrapT": 10497
+    }
+  ],
+  "scene": 0,
+  "scenes": [
+    {
+      "name": "OSG_Scene",
+      "nodes": [
+        0
+      ]
+    }
+  ],
+  "textures": [
+    {
+      "sampler": 0,
+      "source": 0
+    }
+  ]
+}
+
