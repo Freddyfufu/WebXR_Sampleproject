@@ -2,6 +2,7 @@ const path = require('path');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const ESLintPlugin = require('eslint-webpack-plugin');
 const CopyPlugin = require('copy-webpack-plugin');
+const fs = require('fs');
 
 module.exports = {
     mode: 'development',
@@ -13,7 +14,13 @@ module.exports = {
             directory: path.join(__dirname, 'dist'),
         },
         host: '0.0.0.0',
-        server: 'https',
+        server: {
+            type: 'https', // Aktuelles Schema für HTTPS
+            options: {
+                key: fs.readFileSync('./certs/localhost-key.pem'),
+                cert: fs.readFileSync('./certs/localhost.pem'),
+            },
+        },
         compress: true,
         port: 8081,
         client: {
@@ -34,17 +41,19 @@ module.exports = {
         new HtmlWebpackPlugin({
             template: './src/index.html',
         }),
-        // new CopyPlugin({
-        //     patterns: [
-        //         {
-        //             from: path.resolve(__dirname, 'src/assets/three-mesh-ui/assets'),
-        //             to: 'assets',
-        //         },
-        //     ],
-        // }),
+        // Copy assets to the output directory
+        new CopyPlugin({
+            patterns: [
+                {
+                    from: path.resolve(__dirname, 'assets'), // Kopiere Dateien aus dem Verzeichnis 'assets'
+                    to: 'assets', // Zielverzeichnis
+                },
+            ],
+        }),
     ],
     module: {
         rules: [
+            // JSON-Dateien
             {
                 test: /\.json$/,
                 type: 'asset/resource',
@@ -52,11 +61,20 @@ module.exports = {
                     filename: 'assets/[name][ext]',
                 },
             },
+            // Bilder
             {
                 test: /\.(png|jpg|jpeg|gif)$/i,
                 type: 'asset/resource',
                 generator: {
                     filename: 'assets/images/[name][ext]',
+                },
+            },
+            // GLTF/GLB-Dateien
+            {
+                test: /\.(gltf|glb)$/i,
+                type: 'asset/resource',
+                generator: {
+                    filename: 'assets/models/[name][ext]',
                 },
             },
         ],

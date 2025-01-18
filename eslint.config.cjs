@@ -10,10 +10,11 @@ module.exports = {
 	},
 	rules: {
 		'sort-imports': "off",
-		'no-unused-vars': [
-			'warn',
-			{ vars: 'all', args: 'all', argsIgnorePattern: '^_' },
-		],
-		'lines-between-class-members': ['warn', 'always'],
+		'no-unused-vars': "off",
+		'no-undef': "off",
+		'no-useless-constructor': "off",
+		'no-empty-function': "off",
+		'no-prototype-builtins': "off",
+		'lines-between-class-members': "off",
 	},
 };
