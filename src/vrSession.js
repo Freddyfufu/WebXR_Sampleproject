@@ -16,10 +16,25 @@ let mixer;
 let otherPlayers = {};
 const fbxLoader = new FBXLoader();
 const ipv4 = "192.168.137.1";
+let leftArm, rightArm;
 
 
+function updateArms(leftArm, rightArm) {
+    if (controller1) {
+        // Beispiel: Übertrage die Controller-Rotation auf den linken Arm
+        if (leftArm) {
+            leftArm.quaternion.copy(controller1.quaternion);
+        }
+    }
 
+    if (controller2) {
+        // Beispiel: Übertrage die Controller-Rotation auf den rechten Arm
+        if (rightArm) {
+            rightArm.quaternion.copy(controller2.quaternion);
+        }
 
+    }
+}
 
 
 
@@ -35,9 +50,24 @@ function onSessionStart(session) {
     dolly.add(controllerGrip1);
     dolly.add(controllerGrip2)
     scene.add(dolly);
+    // lade eigenen Avatar
     fbxLoader.load('assets/Idle.fbx', (object) => {
         object.scale.set(0.01, 0.01, 0.01);
+
+        // Finde den Armknochen
+        leftArm = object.getObjectByName('mixamorig1LeftArm');
+        rightArm = object.getObjectByName('mixamorig1RightArm');
+
+        if (leftArm && rightArm) {
+            console.log('Left Arm Bone:', leftArm);
+            console.log('Right Arm Bone:', rightArm);
+        }
+
+
         dolly.add(object);
+        mixer = new THREE.AnimationMixer(object);
+        const action = mixer.clipAction(object.animations[0]);
+        action.play();
         console.log('Dolly loaded:', dolly);
     });
 
@@ -135,6 +165,15 @@ function onSessionStart(session) {
 
 export function onSessionEnd() {
     console.log('Session ended');
+    renderer.xr.setSession(null); // Detach the session
+    document.body.classList.remove('xr-active');
+    // remove all player models
+    for (let player in otherPlayers) {
+        scene.remove(otherPlayers[player]);
+    }
+    // remove self
+    scene.remove(dolly);
+    otherPlayers = {};
     mysession = null;
 }
 
@@ -236,6 +275,8 @@ export function initVR() {
 function render(time) {
     if (mixer)
     mixer.update(0.016); // 16ms für eine 60FPS-Rate
+    if (leftArm && rightArm)
+    updateArms(leftArm, rightArm);
 
     try {
         let thumpstick_axes =  controller1.userData.inputSource.gamepad.axes
@@ -260,7 +301,6 @@ function render(time) {
     // socket.emit('player_position', { position: dolly.position, rotation: dolly.rotation });
     renderer.render(scene, camera);
 }
-
 
 function induceControllerRay(controller) {
   if (!controller) {
