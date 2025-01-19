@@ -16,10 +16,11 @@ let mixer;
 let otherPlayers = {};
 const fbxLoader = new FBXLoader();
 const ipv4 = "192.168.137.1";
-let leftArm, rightArm;
+
 
 
 function updateArms(leftArm, rightArm) {
+    // const armOffset = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0)); // Offset für die Arme
     if (controller1) {
         // Beispiel: Übertrage die Controller-Rotation auf den linken Arm
         if (leftArm) {
@@ -54,13 +55,15 @@ function onSessionStart(session) {
     fbxLoader.load('assets/Idle.fbx', (object) => {
         object.scale.set(0.01, 0.01, 0.01);
 
-        // Finde den Armknochen
-        leftArm = object.getObjectByName('mixamorig1LeftArm');
-        rightArm = object.getObjectByName('mixamorig1RightArm');
+        object.rotation.set(0, Math.PI, 0);
 
-        if (leftArm && rightArm) {
-            console.log('Left Arm Bone:', leftArm);
-            console.log('Right Arm Bone:', rightArm);
+        // Finde den Armknochen
+        dolly.leftArm = object.getObjectByName('mixamorig1LeftArm');
+        dolly.rightArm = object.getObjectByName('mixamorig1RightArm');
+
+        if (dolly.rightArm && dolly.leftArm) {
+            console.log('Left Arm Bone:', dolly.leftArm);
+            console.log('Right Arm Bone:', dolly.rightArm);
         }
 
 
@@ -136,7 +139,7 @@ function onSessionStart(session) {
     videoMesh.name = 'videoMesh';
 
 // Position the video mesh
-    videoMesh.position.set(0.025, 0.275, -4.4);
+    videoMesh.position.set(0.020, 1.723, -3.8);
     scene.add(videoMesh);
 
     // Adjust the aspect ratio of the video plane after the video loads
@@ -157,8 +160,7 @@ function onSessionStart(session) {
     groundCollider.rotation.x = -Math.PI / 2; // Liegt flach auf dem Boden
     scene.add(groundCollider);
     // Rufe regelmäßig `sendPlayerPosition` auf, um die eigene Position zu senden
-    setInterval(sendPlayerPosition, 100);  // Sende alle 100ms die eigene Position
-
+    setInterval(sendCharacterState, 100);
 
     renderer.setAnimationLoop(render);
 }
@@ -215,13 +217,14 @@ export function initVR() {
                         // Lade das FBX-Modell für den Spieler
                         fbxLoader.load('assets/Idle.fbx', (object) => {
                             object.scale.set(0.01, 0.01, 0.01);
-
+                            object.rotation.set(0, Math.PI, 0);
+                            otherPlayerGroup.leftArm = object.getObjectByName('mixamorig1LeftArm');
+                            otherPlayerGroup.rightArm = object.getObjectByName('mixamorig1RightArm');
                             // Füge das Modell zur Gruppe hinzu
                             otherPlayerGroup.add(object);
 
                             // Setze die anfängliche Position und Rotation basierend auf den empfangenen Daten
                             otherPlayerGroup.position.set(0, 0, 0);
-                            // otherPlayerGroup.rotation.set(player.dolly.rotation.x, player.dolly.rotation.y, player.dolly.rotation.z);
 
                             // Füge den Spieler zur Szene hinzu
                             scene.add(otherPlayerGroup);
@@ -233,11 +236,32 @@ export function initVR() {
                         otherPlayers[new_player.id] = otherPlayerGroup;
                     });
 
-                    socket.on("update_position", (data) => {
+                    /*
+                    {
+                    id: socket.id,
+                    state: {
+                    animation: currentAnimation,
+                    arms: armRotations,
+                    rotation: rotation,
+                    }
+                    }
+                    * */
+                    socket.on("update_character", (data) => {
                         if (otherPlayers[data.id] && data.id !== socket.id) {
                         console.log('Update position clientside NON SELF:', data);
-                            otherPlayers[data.id].position.copy(data.position);
-                            otherPlayers[data.id].rotation.copy(data.rotation);
+                            otherPlayers[data.id].position.copy(data.state.position);
+                            otherPlayers[data.id].rotation.set(data.state.rotation.x, data.state.rotation.y, data.state.rotation.z);
+                            otherPlayers[data.id].currentAnimationName = data.state.animation;
+                            console.log('Update rotation clientside:', data.state.rotation);
+                            if (data.state.arms.leftArm) {
+                                otherPlayers[data.id].leftArm.rotation.fromArray(data.state.arms.leftArm);
+                            }
+                            if (data.state.arms.rightArm) {
+                                otherPlayers[data.id].rightArm.rotation.fromArray(data.state.arms.rightArm);
+                            }
+
+
+
                         }
                     });
 
@@ -254,6 +278,9 @@ export function initVR() {
                             const otherPlayerGroup = new THREE.Group();
                             fbxLoader.load('assets/Idle.fbx', (object) => {
                                 object.scale.set(0.01, 0.01, 0.01);
+                                object.rotation.set(0, Math.PI, 0);
+                                otherPlayerGroup.leftArm = object.getObjectByName('mixamorig1LeftArm');
+                                otherPlayerGroup.rightArm = object.getObjectByName('mixamorig1RightArm');
                                 otherPlayerGroup.add(object);
                                 otherPlayerGroup.position.set(0, 0, 0);
                                 scene.add(otherPlayerGroup);
@@ -275,8 +302,13 @@ export function initVR() {
 function render(time) {
     if (mixer)
     mixer.update(0.016); // 16ms für eine 60FPS-Rate
-    if (leftArm && rightArm)
-    updateArms(leftArm, rightArm);
+    try {
+        if (dolly.leftArm && dolly.rightArm)
+        updateArms(dolly.leftArm, dolly.rightArm);
+    }
+    catch (e) {
+        console.log(e);
+    }
 
     try {
         let thumpstick_axes =  controller1.userData.inputSource.gamepad.axes
@@ -297,14 +329,13 @@ function render(time) {
         console.log(e);
     }
     ThreeMeshUI.update();
-    // Sende Position und andere Spieler-Informationen an den Server
-    // socket.emit('player_position', { position: dolly.position, rotation: dolly.rotation });
+
     renderer.render(scene, camera);
 }
 
 function induceControllerRay(controller) {
   if (!controller) {
-        // console.error('Controller ist nicht definiert');
+        console.error('Controller ist nicht definiert');
         return;
     }
     const line = controller.getObjectByName('ray');
@@ -353,29 +384,51 @@ function toggleVideoPlayback() {
     }
 }
 
-function sendPlayerPosition() {
-    if (!socket || !dolly) {
-        console.warn('Socket oder dolly ist nicht definiert!');
+function getCharacterState() {
+    if (!dolly) {
+        console.warn('Dolly ist nicht definiert!');
         return;
     }
 
-    // Position und Rotation des Spielers
-    const position = {
-        x: dolly.position.x,
-        y: dolly.position.y,
-        z: dolly.position.z,
+    // Holen der aktuellen Animation
+    const currentAnimation = dolly.currentAnimationName || 'Idle';
+
+    // Holen der Rotationen der Arme
+    const armRotations = {
+        leftArm: dolly.leftArm ? dolly.leftArm.rotation.toArray() : null,
+        rightArm: dolly.rightArm ? dolly.rightArm.rotation.toArray() : null,
     };
 
     const rotation = {
         x: dolly.rotation.x,
         y: dolly.rotation.y,
         z: dolly.rotation.z,
-    };
+    }
 
-    // Sende die Position und Rotation an den Server
-    socket.emit('update_position', {
-        id: socket.id, // Eindeutige ID des Spielers
-        position: position,
+    const position = {
+        x: dolly.position.x,
+        y: dolly.position.y,
+        z: dolly.position.z,
+    }
+
+    return {
+        animation: currentAnimation,
+        arms: armRotations,
         rotation: rotation,
+        position: position,
+    };
+}
+
+
+
+function sendCharacterState() {
+    const characterState = getCharacterState();
+
+    // Sende die Daten an den Server
+    socket.emit('update_character', {
+        id: socket.id, // Spieler-ID
+        state: characterState,
     });
 }
+
+

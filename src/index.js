@@ -27,7 +27,7 @@ const gltfLoader = new GLTFLoader();
 gltfLoader.setDRACOLoader(dracoLoader);
 
 
-gltfLoader.load('assets/home-theater-new.glb', (gltf) => {
+gltfLoader.load('assets/home-theater-new2.glb', (gltf) => {
     const model = gltf.scene; // Das geladene Modell
     scene.add(model); // Modell zur Szene hinzufügen
 }, undefined, function (error) {

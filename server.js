@@ -65,6 +65,10 @@ io.on('connection', (socket) => {
         // Weiterleiten der Positionsdaten an alle anderen Spieler
         socket.broadcast.emit('update_position', data);
     });
+    socket.on('update_character', (data) => {
+        // Weiterleiten der Positionsdaten an alle anderen Spieler
+        socket.broadcast.emit('update_character', data);
+    });
 });
 
 server.listen(3000, ipv4, () => {
