@@ -5,36 +5,61 @@ import {controller1, controller2, controllerGrip1, controllerGrip2, setupControl
 import * as ThreeMeshUI from "three-mesh-ui";
 import * as THREE from "three";
 import {FBXLoader} from "three/examples/jsm/loaders/FBXLoader";
-
-
-
-
+import {interactableObjects} from "./models";
+import { Text } from 'troika-three-text';
+import {makeQuizboard} from "./quizboard";
 
 import { io } from 'socket.io-client';
 export let socket,mysession, referenceSpace, dolly,reticleGeometry,reticleMaterial,reticle, isVideoPlaying = false,playButtonMaterial, video,playTexture,playButtonGeometry, videoMesh,videoTexture, playButtonMesh, videoMaterial, videoGeometry;
 let mixer;
 let otherPlayers = {};
+let isLongPress = false;
+let pressTimer = null;
 const fbxLoader = new FBXLoader();
 const ipv4 = "192.168.137.1";
+let raycaster = new THREE.Raycaster();
+let highlightRaycaster = new THREE.Raycaster();
+const tempMatrixHighlight = new THREE.Matrix4();
+let currentHighlightMesh = null;
+let currentHighlightGroup = null;
 
+const colors = {
+    panelBack: 0x262626,
+    button: 0x363636,
+    hovered: 0xcccccc,
+    selected: 0x109c5d
+};
 
+const question_container = new ThreeMeshUI.Block({
+    width: 2.5,
+    height: 1.7,
+    padding: 0.2,
+    fontFamily: './assets/fonts/Roboto-msdf.json',
+    fontTexture: './assets/fonts/Roboto-msdf.png',
+});
+let current_question = null;
 
-function updateArms(leftArm, rightArm) {
-    // const armOffset = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0)); // Offset für die Arme
-    if (controller1) {
-        // Beispiel: Übertrage die Controller-Rotation auf den linken Arm
-        if (leftArm) {
-            leftArm.quaternion.copy(controller1.quaternion);
+function updateArms() {
+    try {
+        if (dolly.leftArm && dolly.rightArm) {
+            // const armOffset = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0)); // Offset für die Arme
+            if (controller1) {
+                if (dolly.leftArm) {
+                    dolly.leftArm.quaternion.copy(controller1.quaternion);
+                }
+            }
+
+            if (controller2) {
+                if (dolly.rightArm) {
+                    dolly.rightArm.quaternion.copy(controller2.quaternion);
+                }
+
+            }
         }
+    }catch (e) {
+        console.log(e);
     }
 
-    if (controller2) {
-        // Beispiel: Übertrage die Controller-Rotation auf den rechten Arm
-        if (rightArm) {
-            rightArm.quaternion.copy(controller2.quaternion);
-        }
-
-    }
 }
 
 
@@ -42,8 +67,8 @@ function updateArms(leftArm, rightArm) {
 function onSessionStart(session) {
     mysession = session;
     console.log('Session started');
-    setupControllers(scene, renderer);
 
+    setupControllers(scene, renderer);
     dolly = new THREE.Group();
     dolly.add(controller1);
     dolly.add(controller2);
@@ -54,9 +79,8 @@ function onSessionStart(session) {
     // lade eigenen Avatar
     fbxLoader.load('assets/Idle.fbx', (object) => {
         object.scale.set(0.01, 0.01, 0.01);
-
         object.rotation.set(0, Math.PI, 0);
-
+        object.visible = false;
         // Finde den Armknochen
         dolly.leftArm = object.getObjectByName('mixamorig1LeftArm');
         dolly.rightArm = object.getObjectByName('mixamorig1RightArm');
@@ -122,9 +146,6 @@ function onSessionStart(session) {
     playButtonMesh.name = 'playButton';
 
 // Position and scale the play button
-    playButtonMesh.position.set(0.025, 0.275, -4.2);
-    playButtonMesh.scale.set(0.5, 0.5, 0.5);
-    scene.add(playButtonMesh);
 
     // Create a material for the video plane
     videoMaterial = new THREE.MeshBasicMaterial({
@@ -139,9 +160,14 @@ function onSessionStart(session) {
     videoMesh.name = 'videoMesh';
 
 // Position the video mesh
-    videoMesh.position.set(0.020, 1.723, -3.8);
+    let videoMeshPosition = new THREE.Vector3(0.020, 1.723, -3.8);
+    videoMesh.position.set(videoMeshPosition.x, videoMeshPosition.y, videoMeshPosition.z);
     scene.add(videoMesh);
 
+
+    playButtonMesh.position.set(videoMeshPosition.x, videoMeshPosition.y, videoMeshPosition.z + 0.1);
+    playButtonMesh.scale.set(0.5, 0.5, 0.5);
+    scene.add(playButtonMesh);
     // Adjust the aspect ratio of the video plane after the video loads
     video.addEventListener('loadeddata', () => {
         let aspect = video.videoWidth / video.videoHeight;
@@ -159,14 +185,22 @@ function onSessionStart(session) {
 
     groundCollider.rotation.x = -Math.PI / 2; // Liegt flach auf dem Boden
     scene.add(groundCollider);
+
+    const tempMatrix = new THREE.Matrix4();
+    tempMatrix.identity().extractRotation(controller2.matrixWorld);
+    highlightRaycaster.ray.origin.setFromMatrixPosition(controller2.matrixWorld);
+    highlightRaycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
+
     // Rufe regelmäßig `sendPlayerPosition` auf, um die eigene Position zu senden
     setInterval(sendCharacterState, 100);
+    setInterval(highlightRay, 100);
 
     renderer.setAnimationLoop(render);
 }
 
 export function onSessionEnd() {
     console.log('Session ended');
+    // cleanup
     renderer.xr.setSession(null); // Detach the session
     document.body.classList.remove('xr-active');
     // remove all player models
@@ -180,23 +214,82 @@ export function onSessionEnd() {
 }
 
 export function onSelectStart(event) {
-    referenceSpace = VRButton.referenceSpace;
-    induceControllerRay(controller1);
+    // referenceSpace = VRButton.referenceSpace;
+    pressTimer = setTimeout(() => {
+        isLongPress = true;
+    }, 1000); // 1 Sekunde für langes Drücken
 }
 
 function onSelectEnd(event) {
-    referenceSpace = VRButton.referenceSpace;
+    clearTimeout(pressTimer);
+
+    if (isLongPress) {
+        // Langes Drücken: Markierung (rechts), Gegenstand bewegen (links)
+        if (event.inputSource === controller2.userData.inputSource) {
+            // rechts, lange drücken (Markierung)
+        }
+        else if (event.inputSource === controller1.userData.inputSource) { // links, lange drücken (Gegenstand bewegen)
+        }
+        console.log('Long press');
+    }
+    else { // Kurzes Drücken: Verschiedene Aktionen (links), teleportieren (rechts)
+        if (event.inputSource === controller1.userData.inputSource) { // links, kurzes drücken
+            induceControllerRay(controller1);
+        }
+        else if (event.inputSource === controller2.userData.inputSource) { // rechts, kurzes drücken (teleportieren)
+            teleport(controller2);
+
+        }
+
+}
+
+    isLongPress = false; // Zurücksetzen
 }
 
 
+
+function teleport(controller) {
+    if (!controller) {
+        console.error('Controller ist nicht definiert');
+        return;
+    }
+    const line = controller.getObjectByName('ray');
+    if (!line) {
+        console.error('Ray ist nicht definiert');
+        return;
+    }
+    const tempMatrix = new THREE.Matrix4();
+    tempMatrix.identity().extractRotation(controller.matrixWorld);
+    raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
+    raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
+    // Prüfe auf Treffer
+    const intersects = raycaster.intersectObjects(scene.children, true);
+    if (intersects.length > 0) {
+        line.material.color.set(0xffff00); // Strahl färben
+        for (let i = 0; i < intersects.length; i++) {
+            if(intersects[i].object.name === "MyGround"){ // Wenn der Boden getroffen wurde ...
+                reticle.position.copy(intersects[i].point);
+                reticle.position.y = 0.01; // Etwas über dem Boden
+                reticle.visible = true; // Zeige das Reticle an
+                dolly.position.copy(reticle.position);
+                dolly.updateMatrixWorld(true);
+            }}
+    }
+    else {
+        reticle.visible = false; // Verstecke das Reticle
+    }
+}
 
 export function initVR() {
     console.log('initVR');
     const sessionOptions = {
-        requiredFeatures: ['local'],
-        optionalFeatures: ['hand-tracking'],
-        domOverlay: { root: document.body }
+        requiredFeatures: ['local'], // Nutze 'local-floor' für Bodenbezug
+        optionalFeatures: [
+            'hand-tracking',         // Unterstütze Hand-Tracking, falls verfügbar
+        ],
+
     };
+
     if (navigator.xr) {
         navigator.xr.isSessionSupported('immersive-vr')
             .then((supported) => {
@@ -207,6 +300,46 @@ export function initVR() {
                     socket.on('connect', () => {
                         console.log('Verbunden mit dem WebSocket-Server!');
                     });
+
+                    socket.on("start_quiz", (data) => {
+                        // Daten aus dem Quiz
+                        console.log('Quiz started:', data);
+                        const questionText = data.question;
+                        const options = data.options;
+
+                        current_question = new ThreeMeshUI.Text({
+                            content: questionText
+                        });
+
+                        options.forEach((option, index) => {
+                            const optionButton = new ThreeMeshUI.Block({
+                                width: 0.5,
+                                height: 0.3,
+                                padding: 0.1,
+                                fontFamily: './assets/fonts/Roboto-msdf.json',
+                                fontTexture: './assets/fonts/Roboto-msdf.png',
+                                backgroundColor: new THREE.Color(colors.button),
+                            });
+                            const optionText = new ThreeMeshUI.Text({
+                                content: option,
+                            });
+                            optionButton.add(optionText);
+                            optionButton.name = 'option' + (index+1);
+                            optionButton.state = 'idle';
+                            question_container.add(optionButton);
+                        });
+
+
+                        question_container.add( current_question );
+
+                        question_container.position.set(8, 3, -4);
+                        question_container.name = 'question_container';
+                        question_container.selectedOption = null;
+                        scene.add( question_container);
+                    });
+
+
+
                     socket.on('add_player', (new_player, all_players) => {
                         if (new_player.id === socket.id) return;
                         console.log('Other players:', otherPlayers);
@@ -236,16 +369,7 @@ export function initVR() {
                         otherPlayers[new_player.id] = otherPlayerGroup;
                     });
 
-                    /*
-                    {
-                    id: socket.id,
-                    state: {
-                    animation: currentAnimation,
-                    arms: armRotations,
-                    rotation: rotation,
-                    }
-                    }
-                    * */
+
                     socket.on("update_character", (data) => {
                         if (otherPlayers[data.id] && data.id !== socket.id) {
                         console.log('Update position clientside NON SELF:', data);
@@ -299,41 +423,198 @@ export function initVR() {
 
 }
 
-function render(time) {
-    if (mixer)
-    mixer.update(0.016); // 16ms für eine 60FPS-Rate
-    try {
-        if (dolly.leftArm && dolly.rightArm)
-        updateArms(dolly.leftArm, dolly.rightArm);
-    }
-    catch (e) {
-        console.log(e);
-    }
 
+
+const highlightShaderMaterial = new THREE.ShaderMaterial({
+    uniforms: {
+        glowColor: { value: new THREE.Color(0x00ff00) }, // Highlight-Farbe
+    },
+    vertexShader: `
+        varying vec3 vNormal;
+        void main() {
+            vNormal = normalize(normalMatrix * normal);
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+    `,
+    fragmentShader: `
+        varying vec3 vNormal;
+        uniform vec3 glowColor;
+        void main() {
+            float intensity = pow(1.0 - dot(vNormal, vec3(0.0, 0.0, 1.0)), 2.0);
+            gl_FragColor = vec4(glowColor, intensity);
+        }
+    `,
+    side: THREE.FrontSide,
+    transparent: true,
+});
+
+function highlightRay() {
+    tempMatrixHighlight.identity().extractRotation(controller1.matrixWorld);
+    highlightRaycaster.ray.origin.setFromMatrixPosition(controller1.matrixWorld);
+    highlightRaycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrixHighlight);
+    let proxyObjects = interactableObjects.map((x) => x);
+    if (question_container) {
+    proxyObjects = interactableObjects.concat(question_container);
+        // interactableObjects.push(question_container);
+    }
+    let intersects = highlightRaycaster.intersectObjects(proxyObjects, true);
+    if (intersects.length > 0) {
+        for (let i = 0; i < intersects.length; i++) {
+            const intersectedObject = intersects[i].object;
+            // Traverse parents to check if any has the name "Lambo"
+            let currentObject = intersectedObject;
+
+            while (currentObject) {
+                if (currentObject.name === "lambo") {
+                    // console.log("Lambo getroffen:", intersectedObject);
+                    if (!currentHighlightGroup) {
+                        // Berechne die BoundingBox des Objekts
+                        const boundingBox = new THREE.Box3().setFromObject(currentObject);
+                        const boxSize = new THREE.Vector3();
+                        boundingBox.getSize(boxSize); // Größe der BoundingBox
+                        const boxCenter = new THREE.Vector3();
+                        boundingBox.getCenter(boxCenter); // Zentrum der BoundingBox
+                        // Erstelle die Highlight-Geometrie basierend auf der BoundingBox
+                        const highlightGeometry = new THREE.SphereGeometry(boxSize.length() / 2, 32, 32);
+                        currentHighlightMesh = new THREE.Mesh(highlightGeometry, highlightShaderMaterial);
+                        currentHighlightMesh.position.copy(boxCenter)
+                        currentHighlightMesh.renderOrder = 1; // So wird Text immer sichtbar
+                        currentHighlightGroup = new THREE.Group();
+                        currentHighlightGroup.currentObject = "lambo";
+                        currentHighlightGroup.add(currentHighlightMesh);
+                        let myText = currentObject.myText;
+                        // Berechne die BoundingBox des Textes
+                        const textBoundingBox = new THREE.Box3().setFromObject(myText);
+                        const textSize = new THREE.Vector3();
+                        textBoundingBox.getSize(textSize); // Größe des Textes
+                        myText.position.set(
+                            boxCenter.x - textSize.x / 2, // Horizontal zentrieren
+                            boxCenter.y + boxSize.y / 2 + 0.5, // Oberhalb des Objekts platzieren
+                            boxCenter.z
+                        );
+                        const cameraWorldPosition = new THREE.Vector3();
+                        camera.getWorldPosition(cameraWorldPosition); // Kamera-Weltposition
+
+                        const textWorldPosition = new THREE.Vector3();
+                        myText.getWorldPosition(textWorldPosition); // Text-Weltposition
+
+                        const direction = new THREE.Vector3().subVectors(cameraWorldPosition, textWorldPosition);
+
+                        direction.y = 0; // Entferne den Einfluss der Y-Achse
+                        direction.normalize(); // Normiere den Vektor
+
+                        const quaternion = new THREE.Quaternion().setFromUnitVectors(
+                            new THREE.Vector3(0, 0, 1), // Standard-Richtungsvektor
+                            direction
+                        );
+
+                        myText.quaternion.copy(quaternion); // Setze die Rotation des Textes
+
+                        currentHighlightGroup.add(myText);
+                        scene.add(currentHighlightGroup);
+                        return;
+                    }
+                }
+
+                // handle quizboard options
+                if (currentObject.name.startsWith('option')) {
+                    button_hover(currentObject);
+                    // console.log('Option getroffen:', currentObject.name);
+                    return;
+                }
+                else {
+                    button_hover(null);
+                }
+                currentObject = currentObject.parent;
+            }
+        }
+    }
+    else{
+        scene.remove(currentHighlightMesh);
+        scene.remove(currentHighlightGroup);
+        currentHighlightGroup = null;
+    }
+}
+function button_hover(currentObject) {
+    if (!currentObject) {
+        question_container.children.forEach((child) => {
+            if (child.name.startsWith("option") && child.state !== 'selected') {
+                child.set({backgroundColor: new THREE.Color(colors.button)});
+                child.state = 'idle';
+            }
+        });
+        return;
+    }
+    if (currentObject.state !== 'selected') {
+        currentObject.set({backgroundColor: new THREE.Color(colors.hovered)});
+        currentObject.state = 'hovered';
+    }
+    question_container.children.forEach((child) => {
+        if (child.name.startsWith("option") && child.name !== currentObject.name && child.state !== 'selected') {
+            child.set({backgroundColor: new THREE.Color(colors.button)});
+            child.state = 'idle';
+        }
+    });
+}
+
+function render(time) {
+    // highlightRay();
+    if (mixer)  mixer.update(0.016); // 16ms für eine 60FPS-Rate
+    updateArms(dolly.leftArm, dolly.rightArm);
+    turnCharacter();
+    ThreeMeshUI.update();
+    renderer.render(scene, camera);
+}
+
+function turnCharacter() {
     try {
-        let thumpstick_axes =  controller1.userData.inputSource.gamepad.axes
-        if (thumpstick_axes[3] > 0.5) {
+        let thumpstick_axes1 =  controller1.userData.inputSource.gamepad.axes;
+        let thumpstick_axes2 =  controller2.userData.inputSource.gamepad.axes;
+        if (thumpstick_axes1[3] > 0.5) {
             dolly.translateZ(0.1);
         }
-        if (thumpstick_axes[3] < -0.5) {
+        if (thumpstick_axes1[3] < -0.5) {
             dolly.translateZ(-0.1);
         }
-        if (thumpstick_axes[2] > 0.5) {
+        if (thumpstick_axes1[2] > 0.5) {
             dolly.rotateY(-0.05);
         }
-        if (thumpstick_axes[2] < -0.5) {
+        if (thumpstick_axes1[2] < -0.5) {
+            dolly.rotateY(0.05);
+        }
+        if (thumpstick_axes1[1] > 0.5) {
+            dolly.translateX(-0.1);
+        }
+        if (thumpstick_axes1[1] < -0.5) {
+            dolly.translateX(0.1);
+        }
+
+        if (thumpstick_axes2[2] > 0.5) {
+            dolly.rotateY(-0.05);
+        }
+        if (thumpstick_axes2[2] < -0.5) {
             dolly.rotateY(0.05);
         }
     }
     catch (e) {
         console.log(e);
     }
-    ThreeMeshUI.update();
-
-    renderer.render(scene, camera);
 }
 
+
+
 function induceControllerRay(controller) {
+    if (currentHighlightGroup) {
+        switch (currentHighlightGroup.currentObject) {
+            case "lambo":
+                console.log("Requesting quiz for lambo");
+                socket.emit('request_quiz', {player_id: socket.id, exponat: currentHighlightGroup.currentObject});
+                break;
+            default:
+                break;
+        }
+        return;
+    }
   if (!controller) {
         console.error('Controller ist nicht definiert');
         return;
@@ -345,30 +626,43 @@ function induceControllerRay(controller) {
     }
     const tempMatrix = new THREE.Matrix4();
     tempMatrix.identity().extractRotation(controller.matrixWorld);
-    let raycaster = new THREE.Raycaster();
     raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
     raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
-
-
     // Prüfe auf Treffer
-    const intersects = raycaster.intersectObjects(scene.children, true);
+    let proxyObjects = scene.children.map((x) => x);
+    if (question_container) {
+        proxyObjects = scene.children.concat(question_container);
+    }
+    const intersects = raycaster.intersectObjects(proxyObjects, true);
+    console.log("intersects:", intersects);
     if (intersects.length > 0) {
         line.material.color.set(0xffff00); // Strahl färben
         for (let i = 0; i < intersects.length; i++) {
-            if (intersects[i].object === videoMesh) {
-                toggleVideoPlayback(); // Video abspielen oder pausieren
+            let currentObject = intersects[i].object;
+            while (currentObject.parent) {
+                if (currentObject === videoMesh) {
+                    toggleVideoPlayback(); // Video abspielen oder pausieren
+                }
+                    question_container.children.forEach((child) => {
+                        if (child.name.startsWith("option")) {
+                            if (child.state === 'hovered') {
+                                console.log('Option seleddddcted:', child.name);
+                                child.set({backgroundColor: new THREE.Color(colors.selected)});
+                                child.state = 'selected';
+                                if (question_container.selectedOption && question_container.selectedOption !== child) {
+                                    question_container.selectedOption.set({backgroundColor: new THREE.Color(colors.button)});
+                                    question_container.selectedOption.state = 'idle';
+                                }
+                                    question_container.selectedOption = child;
+                            }
+                        }
+                    })
+                currentObject = currentObject.parent;
             }
-            else if(intersects[i].object.name === "MyGround"){ // Wenn der Boden getroffen wurde ...
-                reticle.position.copy(intersects[i].point);
-                reticle.position.y = 0.01; // Etwas über dem Boden
-                reticle.visible = true; // Zeige das Reticle an
-                dolly.position.copy(reticle.position);
-                dolly.updateMatrixWorld(true);
-            }}
+
+          }
     }
-    else {
-        reticle.visible = false; // Verstecke das Reticle
-    }
+
 
 }
 

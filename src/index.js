@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import {VRButton} from "three/examples/jsm/webxr/VRButton";
 // require('three/examples/jsm/webxr/VRButton.js');
 import {OBJLoader} from "three/examples/jsm/loaders/OBJLoader";
 import {MTLLoader} from "three/examples/jsm/loaders/MTLLoader";
@@ -8,31 +7,17 @@ import {FBXLoader} from "three/examples/jsm/loaders/FBXLoader";
 import {DRACOLoader} from "three/examples/jsm/loaders/DRACOLoader";
 import { Text } from 'troika-three-text';
 import * as ThreeMeshUI from 'three-mesh-ui';
-import { XRControllerModelFactory } from 'three/examples/jsm/webxr/XRControllerModelFactory.js';
 import {VideoNode} from './js/render/nodes/video.js';
 import fontFamily from '../assets/three-mesh-ui/assets/Roboto-msdf.json';
 import fontTexture from '../assets/three-mesh-ui/assets/Roboto-msdf.png';
 import { scene, camera, renderer } from './scene.js';
 import { initVR } from './vrSession.js';
+import {loadModels} from "./models";
 
 initVR();
 
 
-
-// DracoLoader erstellen und konfigurieren
-const dracoLoader = new DRACOLoader();
-dracoLoader.setDecoderPath('./assets/libs/draco/'); // Pfad zum Draco-Ordner setzen
-
-const gltfLoader = new GLTFLoader();
-gltfLoader.setDRACOLoader(dracoLoader);
-
-
-gltfLoader.load('assets/home-theater-new2.glb', (gltf) => {
-    const model = gltf.scene; // Das geladene Modell
-    scene.add(model); // Modell zur Szene hinzufügen
-}, undefined, function (error) {
-        console.error('An error happened:', error);
-    });
+loadModels();
 
 // Koordinatensystem hinzufügen
 const axesHelper = new THREE.AxesHelper(5); // 5 = Länge der Achsen
@@ -69,6 +54,7 @@ const text_welcome = new ThreeMeshUI.Text({
     content: "Willkommen im virtuellen Museum",
 
 });
+panel_welcome.add( text_welcome );
 
 const panel_enter_name = new ThreeMeshUI.Block({
     width: 1.2,
@@ -89,7 +75,6 @@ panel_enter_name.rotation.x = 20;
 panel_enter_name.rotation.y = 20;
 
 
-panel_welcome.add( text_welcome );
 
 scene.add( panel_welcome );
 

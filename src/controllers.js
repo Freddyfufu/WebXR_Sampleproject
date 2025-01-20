@@ -2,19 +2,27 @@
 import * as THREE from 'three';
 import { XRControllerModelFactory } from 'three/examples/jsm/webxr/XRControllerModelFactory.js';
 
-export let controller1, controller2, controllerGrip1, controllerGrip2, inputSource1;
+export let controller1, controller2, controllerGrip1, controllerGrip2, inputSource1, inputSource2;
 
 
 
 export function setupControllers(scene, renderer) {
     controller1 = renderer.xr.getController(0);
     controller2 = renderer.xr.getController(1);
+    console.log('controller1:', controller1);
+    console.log('controller2:', controller2);
 
 // Event-Listener für das `connected`-Event hinzufügen
     controller1.addEventListener('connected', (event) => {
         inputSource1 = event.data; // Zugriff auf XRInputSource
         console.log('Controller 1 verbunden:', inputSource1);
         controller1.userData.inputSource = inputSource1; // Speichere inputSource in userData
+    });
+
+    controller2.addEventListener('connected', (event) => {
+        inputSource2 = event.data; // Zugriff auf XRInputSource
+        console.log('Controller 2 verbunden:', inputSource2);
+        controller2.userData.inputSource = inputSource2; // Speichere inputSource in userData
     });
 
     scene.add(controller1);
