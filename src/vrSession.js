@@ -30,14 +30,48 @@ const colors = {
     selected: 0x109c5d
 };
 
-const question_container = new ThreeMeshUI.Block({
-    width: 2.5,
-    height: 1.7,
-    padding: 0.2,
-    fontFamily: './assets/fonts/Roboto-msdf.json',
-    fontTexture: './assets/fonts/Roboto-msdf.png',
-});
+let question_container = null;
 let current_question = null;
+
+function resetQuestionContainer() {
+    if (question_container) {
+        question_container.children.forEach((child) => {
+            question_container.remove(child);
+        });
+        scene.remove(question_container);
+        question_container = null;
+    }
+
+    // Create the question container
+    question_container = new ThreeMeshUI.Block({
+        width: 2.5,
+        height: 1.7,
+        padding: 0.1,
+        fontFamily: './assets/fonts/Roboto-msdf.json',
+        fontTexture: './assets/fonts/Roboto-msdf.png',
+    });
+    question_container.name = 'question_container';
+    question_container.position.set(8, 3, -4); // Set the container's world position
+    question_container.selectedOption = null;
+
+    // Create the sound source
+    const soundSource = new THREE.Object3D();
+    question_container.add(soundSource);
+
+    // Add the question container to the scene
+    scene.add(question_container);
+
+    // Update world position of the sound source after adding to the scene
+    const worldPos = new THREE.Vector3();
+    soundSource.getWorldPosition(worldPos);
+
+    // soundSource.position.set(...worldPos);
+    console.log('Sound source local position:', soundSource.position);
+    console.log('Sound source world position:', worldPos);
+
+    // Store sound source in the container
+    question_container.soundSource = soundSource;
+}
 
 function updateArms() {
     try {
@@ -61,6 +95,12 @@ function updateArms() {
     }
 
 }
+window.addEventListener('blur', () => {
+    console.log('Window lost focus');
+    // As a general rule you should mute any sounds your page is playing
+    // whenever the page loses focus.
+    // pauseAudio();
+});
 
 
 
@@ -90,7 +130,7 @@ function onSessionStart(session) {
             console.log('Right Arm Bone:', dolly.rightArm);
         }
 
-
+        dolly.position.set(8, 0, 0);
         dolly.add(object);
         mixer = new THREE.AnimationMixer(object);
         const action = mixer.clipAction(object.animations[0]);
@@ -164,7 +204,6 @@ function onSessionStart(session) {
     videoMesh.position.set(videoMeshPosition.x, videoMeshPosition.y, videoMeshPosition.z);
     scene.add(videoMesh);
 
-
     playButtonMesh.position.set(videoMeshPosition.x, videoMeshPosition.y, videoMeshPosition.z + 0.1);
     playButtonMesh.scale.set(0.5, 0.5, 0.5);
     scene.add(playButtonMesh);
@@ -193,6 +232,7 @@ function onSessionStart(session) {
 
     // Rufe regelmäßig `sendPlayerPosition` auf, um die eigene Position zu senden
     setInterval(sendCharacterState, 100);
+
     setInterval(highlightRay, 100);
 
     renderer.setAnimationLoop(render);
@@ -246,6 +286,36 @@ function onSelectEnd(event) {
     isLongPress = false; // Zurücksetzen
 }
 
+function playAudioAt(soundSource, audioFile) {
+    // Create an AudioListener and attach it to the camera
+    const listener = new THREE.AudioListener();
+    camera.add(listener);
+
+    // Create the PositionalAudio object
+    const sound = new THREE.PositionalAudio(listener);
+
+    // Add the PositionalAudio to the sound source
+    soundSource.add(sound);
+
+    // Debugging: Log the sound source world position
+    const worldPos = new THREE.Vector3();
+    soundSource.getWorldPosition(worldPos);
+    console.log('Playing audio at (world position):', worldPos);
+    console.log("Camera position:", camera.position);
+
+    // Load and play the audio
+    const audioLoader = new THREE.AudioLoader();
+    audioLoader.load(audioFile, function (buffer) {
+        sound.setBuffer(buffer);
+        sound.setRefDistance(2);// Distance at which the volume starts decreasing
+        sound.setVolume(10)
+        ; // Max volume
+        sound.play();
+    });
+}
+
+
+resetQuestionContainer();
 
 
 function teleport(controller) {
@@ -280,6 +350,47 @@ function teleport(controller) {
     }
 }
 
+function startQuiz(data) {
+    resetQuestionContainer();
+    playAudioAt(question_container.soundSource,'./assets/media/sound/drums.ogg');
+
+    console.log('Quiz started:', data);
+    const questionText = data.question;
+    const options = data.options;
+    current_question = new ThreeMeshUI.Text({
+        content: questionText,
+        fontSize: 0.1,
+        width: 2.4,
+        padding: 1,
+    });
+    question_container.add( current_question );
+
+
+    options.forEach((option, index) => {
+        const optionButton = new ThreeMeshUI.Block({
+            width: 2,
+            height: 0.3,
+            padding: 0.1,
+            fontFamily: './assets/fonts/Roboto-msdf.json',
+            fontTexture: './assets/fonts/Roboto-msdf.png',
+            backgroundColor: new THREE.Color(colors.button),
+        });
+        const optionText = new ThreeMeshUI.Text({
+            content: option,
+            fontSize: 0.1,
+        });
+        optionButton.add(optionText);
+        optionButton.name = 'option' + (index+1);
+        optionButton.state = 'idle';
+        question_container.add(optionButton);
+    });
+
+
+
+
+
+}
+
 export function initVR() {
     console.log('initVR');
     const sessionOptions = {
@@ -302,42 +413,8 @@ export function initVR() {
                     });
 
                     socket.on("start_quiz", (data) => {
-                        // Daten aus dem Quiz
-                        console.log('Quiz started:', data);
-                        const questionText = data.question;
-                        const options = data.options;
-
-                        current_question = new ThreeMeshUI.Text({
-                            content: questionText
-                        });
-
-                        options.forEach((option, index) => {
-                            const optionButton = new ThreeMeshUI.Block({
-                                width: 0.5,
-                                height: 0.3,
-                                padding: 0.1,
-                                fontFamily: './assets/fonts/Roboto-msdf.json',
-                                fontTexture: './assets/fonts/Roboto-msdf.png',
-                                backgroundColor: new THREE.Color(colors.button),
-                            });
-                            const optionText = new ThreeMeshUI.Text({
-                                content: option,
-                            });
-                            optionButton.add(optionText);
-                            optionButton.name = 'option' + (index+1);
-                            optionButton.state = 'idle';
-                            question_container.add(optionButton);
-                        });
-
-
-                        question_container.add( current_question );
-
-                        question_container.position.set(8, 3, -4);
-                        question_container.name = 'question_container';
-                        question_container.selectedOption = null;
-                        scene.add( question_container);
+                        startQuiz(data);
                     });
-
 
 
                     socket.on('add_player', (new_player, all_players) => {
@@ -377,11 +454,15 @@ export function initVR() {
                             otherPlayers[data.id].rotation.set(data.state.rotation.x, data.state.rotation.y, data.state.rotation.z);
                             otherPlayers[data.id].currentAnimationName = data.state.animation;
                             console.log('Update rotation clientside:', data.state.rotation);
-                            if (data.state.arms.leftArm) {
-                                otherPlayers[data.id].leftArm.rotation.fromArray(data.state.arms.leftArm);
-                            }
-                            if (data.state.arms.rightArm) {
-                                otherPlayers[data.id].rightArm.rotation.fromArray(data.state.arms.rightArm);
+                            try {
+                                if (data.state.arms.leftArm) {
+                                    otherPlayers[data.id].leftArm.rotation.fromArray(data.state.arms.leftArm);
+                                }
+                                if (data.state.arms.rightArm) {
+                                    otherPlayers[data.id].rightArm.rotation.fromArray(data.state.arms.rightArm);
+                                }
+                            } catch (e) {
+                                console.log(e);
                             }
 
 
@@ -423,7 +504,52 @@ export function initVR() {
 
 }
 
+function handleHighlightedObject(currentObject){
+    // Berechne die BoundingBox des Objekts
+    const boundingBox = new THREE.Box3().setFromObject(currentObject);
+    const boxSize = new THREE.Vector3();
+    boundingBox.getSize(boxSize); // Größe der BoundingBox
+    const boxCenter = new THREE.Vector3();
+    boundingBox.getCenter(boxCenter); // Zentrum der BoundingBox
+    // Erstelle die Highlight-Geometrie basierend auf der BoundingBox
+    const highlightGeometry = new THREE.SphereGeometry(boxSize.length() / 2, 32, 32);
+    currentHighlightMesh = new THREE.Mesh(highlightGeometry, highlightShaderMaterial);
+    currentHighlightMesh.position.copy(boxCenter)
+    currentHighlightMesh.renderOrder = 1; // So wird Text immer sichtbar
+    currentHighlightGroup = new THREE.Group();
+    currentHighlightGroup.currentObject = currentObject.name;
+    currentHighlightGroup.add(currentHighlightMesh);
+    let myText = currentObject.myText;
+    // Berechne die BoundingBox des Textes
+    const textBoundingBox = new THREE.Box3().setFromObject(myText);
+    const textSize = new THREE.Vector3();
+    textBoundingBox.getSize(textSize); // Größe des Textes
+    myText.position.set(
+        boxCenter.x - textSize.x / 2, // Horizontal zentrieren
+        boxCenter.y + boxSize.y / 2 + 0.5, // Oberhalb des Objekts platzieren
+        boxCenter.z
+    );
+    const cameraWorldPosition = new THREE.Vector3();
+    camera.getWorldPosition(cameraWorldPosition); // Kamera-Weltposition
 
+    const textWorldPosition = new THREE.Vector3();
+    myText.getWorldPosition(textWorldPosition); // Text-Weltposition
+
+    const direction = new THREE.Vector3().subVectors(cameraWorldPosition, textWorldPosition);
+
+    direction.y = 0;
+    direction.normalize();
+
+    const quaternion = new THREE.Quaternion().setFromUnitVectors(
+        new THREE.Vector3(0, 0, 1), // Standard-Richtungsvektor
+        direction
+    );
+
+    myText.quaternion.copy(quaternion); // Setze die Rotation des Textes in Richtung der Kamera
+
+    currentHighlightGroup.add(myText);
+    scene.add(currentHighlightGroup);
+}
 
 const highlightShaderMaterial = new THREE.ShaderMaterial({
     uniforms: {
@@ -455,7 +581,6 @@ function highlightRay() {
     let proxyObjects = interactableObjects.map((x) => x);
     if (question_container) {
     proxyObjects = interactableObjects.concat(question_container);
-        // interactableObjects.push(question_container);
     }
     let intersects = highlightRaycaster.intersectObjects(proxyObjects, true);
     if (intersects.length > 0) {
@@ -465,53 +590,9 @@ function highlightRay() {
             let currentObject = intersectedObject;
 
             while (currentObject) {
-                if (currentObject.name === "lambo") {
-                    // console.log("Lambo getroffen:", intersectedObject);
-                    if (!currentHighlightGroup) {
-                        // Berechne die BoundingBox des Objekts
-                        const boundingBox = new THREE.Box3().setFromObject(currentObject);
-                        const boxSize = new THREE.Vector3();
-                        boundingBox.getSize(boxSize); // Größe der BoundingBox
-                        const boxCenter = new THREE.Vector3();
-                        boundingBox.getCenter(boxCenter); // Zentrum der BoundingBox
-                        // Erstelle die Highlight-Geometrie basierend auf der BoundingBox
-                        const highlightGeometry = new THREE.SphereGeometry(boxSize.length() / 2, 32, 32);
-                        currentHighlightMesh = new THREE.Mesh(highlightGeometry, highlightShaderMaterial);
-                        currentHighlightMesh.position.copy(boxCenter)
-                        currentHighlightMesh.renderOrder = 1; // So wird Text immer sichtbar
-                        currentHighlightGroup = new THREE.Group();
-                        currentHighlightGroup.currentObject = "lambo";
-                        currentHighlightGroup.add(currentHighlightMesh);
-                        let myText = currentObject.myText;
-                        // Berechne die BoundingBox des Textes
-                        const textBoundingBox = new THREE.Box3().setFromObject(myText);
-                        const textSize = new THREE.Vector3();
-                        textBoundingBox.getSize(textSize); // Größe des Textes
-                        myText.position.set(
-                            boxCenter.x - textSize.x / 2, // Horizontal zentrieren
-                            boxCenter.y + boxSize.y / 2 + 0.5, // Oberhalb des Objekts platzieren
-                            boxCenter.z
-                        );
-                        const cameraWorldPosition = new THREE.Vector3();
-                        camera.getWorldPosition(cameraWorldPosition); // Kamera-Weltposition
-
-                        const textWorldPosition = new THREE.Vector3();
-                        myText.getWorldPosition(textWorldPosition); // Text-Weltposition
-
-                        const direction = new THREE.Vector3().subVectors(cameraWorldPosition, textWorldPosition);
-
-                        direction.y = 0; // Entferne den Einfluss der Y-Achse
-                        direction.normalize(); // Normiere den Vektor
-
-                        const quaternion = new THREE.Quaternion().setFromUnitVectors(
-                            new THREE.Vector3(0, 0, 1), // Standard-Richtungsvektor
-                            direction
-                        );
-
-                        myText.quaternion.copy(quaternion); // Setze die Rotation des Textes
-
-                        currentHighlightGroup.add(myText);
-                        scene.add(currentHighlightGroup);
+                if (!currentHighlightGroup) {
+                    if (currentObject.name === "lambo") {
+                        handleHighlightedObject(currentObject);
                         return;
                     }
                 }
@@ -563,6 +644,8 @@ function render(time) {
     updateArms(dolly.leftArm, dolly.rightArm);
     turnCharacter();
     ThreeMeshUI.update();
+    renderer.xr.updateCamera(camera);
+
     renderer.render(scene, camera);
 }
 
@@ -628,14 +711,12 @@ function induceControllerRay(controller) {
     tempMatrix.identity().extractRotation(controller.matrixWorld);
     raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
     raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
+    tryQuizButtonSelect();
     // Prüfe auf Treffer
-    let proxyObjects = scene.children.map((x) => x);
-    if (question_container) {
-        proxyObjects = scene.children.concat(question_container);
-    }
-    const intersects = raycaster.intersectObjects(proxyObjects, true);
+    const intersects = raycaster.intersectObjects(scene.children, true);
     console.log("intersects:", intersects);
     if (intersects.length > 0) {
+
         line.material.color.set(0xffff00); // Strahl färben
         for (let i = 0; i < intersects.length; i++) {
             let currentObject = intersects[i].object;
@@ -643,27 +724,30 @@ function induceControllerRay(controller) {
                 if (currentObject === videoMesh) {
                     toggleVideoPlayback(); // Video abspielen oder pausieren
                 }
-                    question_container.children.forEach((child) => {
-                        if (child.name.startsWith("option")) {
-                            if (child.state === 'hovered') {
-                                console.log('Option seleddddcted:', child.name);
-                                child.set({backgroundColor: new THREE.Color(colors.selected)});
-                                child.state = 'selected';
-                                if (question_container.selectedOption && question_container.selectedOption !== child) {
-                                    question_container.selectedOption.set({backgroundColor: new THREE.Color(colors.button)});
-                                    question_container.selectedOption.state = 'idle';
-                                }
-                                    question_container.selectedOption = child;
-                            }
-                        }
-                    })
                 currentObject = currentObject.parent;
             }
 
           }
     }
+}
 
-
+function tryQuizButtonSelect(){
+    if (question_container) {
+        question_container.children.forEach((child) => {
+            if (child.name.startsWith("option")) {
+                if (child.state === 'hovered') {
+                    console.log('Option seleddddcted:', child.name);
+                    child.set({backgroundColor: new THREE.Color(colors.selected)});
+                    child.state = 'selected';
+                    if (question_container.selectedOption && question_container.selectedOption !== child) {
+                        question_container.selectedOption.set({backgroundColor: new THREE.Color(colors.button)});
+                        question_container.selectedOption.state = 'idle';
+                    }
+                    question_container.selectedOption = child;
+                }
+            }
+        })
+    }
 }
 
 function toggleVideoPlayback() {
@@ -712,8 +796,6 @@ function getCharacterState() {
         position: position,
     };
 }
-
-
 
 function sendCharacterState() {
     const characterState = getCharacterState();

@@ -84,12 +84,11 @@ io.on('connection', (socket) => {
     });
 
 
-    socket.on('update_position', (data) => {
-        // Weiterleiten der Positionsdaten an alle anderen Spieler
-        socket.broadcast.emit('update_position', data);
-    });
+    // socket.on('update_position', (data) => {
+    //     // Weiterleiten der Positionsdaten an alle anderen Spieler
+    //     socket.broadcast.emit('update_position', data);
+    // });
     socket.on('update_character', (data) => {
-        // Weiterleiten der Positionsdaten an alle anderen Spieler
         socket.broadcast.emit('update_character', data);
     });
 });
