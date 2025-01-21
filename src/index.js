@@ -11,10 +11,10 @@ import {VideoNode} from './js/render/nodes/video.js';
 import fontFamily from '../assets/three-mesh-ui/assets/Roboto-msdf.json';
 import fontTexture from '../assets/three-mesh-ui/assets/Roboto-msdf.png';
 import { scene, camera, renderer } from './scene.js';
-import { initVR } from './vrSession.js';
+import { initXR } from './vrSession.js';
 import {loadModels} from "./models";
 
-initVR();
+initXR();
 
 
 loadModels();

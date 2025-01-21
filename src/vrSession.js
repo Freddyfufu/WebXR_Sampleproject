@@ -1,4 +1,6 @@
-import {VRButton} from 'three/examples/jsm/webxr/VRButton.js';
+import {MyXRButton} from "./MyXRButton.js";
+// import {ARButton} from 'three/examples/jsm/webxr/ARButton.js';
+
 import {renderer, scene, camera} from './scene.js';
 import {controller1, controller2, controllerGrip1, controllerGrip2, setupControllers} from './controllers.js';
 import * as ThreeMeshUI from "three-mesh-ui";
@@ -18,6 +20,7 @@ let isLongPress = false;
 let pressTimer = null;
 const fbxLoader = new FBXLoader();
 const ipv4 = "192.168.137.1";
+const server_port = 3000;
 let raycaster = new THREE.Raycaster();
 let highlightRaycaster = new THREE.Raycaster();
 const tempMatrixHighlight = new THREE.Matrix4();
@@ -33,10 +36,18 @@ const colors = {
     correct: 0x00ff00
 };
 
+let isARAvailable = false;
+let isVRAvailable = false;
 let current_question = null;
-
 let question_container = null;
 let character_url = 'assets/Idle.fbx';
+
+const sessionOptions = {
+    requiredFeatures: ['local'], // Nutze 'local-floor' für Bodenbezug
+    optionalFeatures: [
+        'hand-tracking',
+    ],
+};
 
 function resetQuestionContainer() {
     try {
@@ -412,7 +423,6 @@ function startQuiz(data) {
 }
 
 function showAnimationFromPlayer(player_id, isCorrect) {
-    // create winning animation at players position
     let player_dolly;
     if (player_id !== socket.id) {
         player_dolly = otherPlayers[player_id];
@@ -440,9 +450,6 @@ function showAnimationFromPlayer(player_id, isCorrect) {
         new THREE.MeshBasicMaterial({color: color, transparent: true, opacity: 0.8})
     );
 
-    // Position the effect above the player character
-    // const characterPosition = new THREE.Vector3();
-    // player_dolly.getWorldPosition(characterPosition);
     // destroy after 3 seconds
     setTimeout(() => {
         player_dolly.remove(animationEffect);
@@ -453,104 +460,95 @@ function showAnimationFromPlayer(player_id, isCorrect) {
 
 }
 
-export function initVR() {
-    console.log('initVR');
-    const sessionOptions = {
-        requiredFeatures: ['local'], // Nutze 'local-floor' für Bodenbezug
-        optionalFeatures: [
-            'hand-tracking',         // Unterstütze Hand-Tracking, falls verfügbar
-        ],
-
-    };
-
+export function initXR() {
     if (navigator.xr) {
         navigator.xr.isSessionSupported('immersive-vr')
             .then((supported) => {
+                isVRAvailable = supported;
                 if (supported) {
                     console.log('VR wird unterstützt');
-                    socket = io.connect('https://' + ipv4 + ':3000');
-
-                    socket.on('connect', () => {
-                        console.log('Verbunden mit dem WebSocket-Server!');
-                    });
-
-                    socket.on("start_quiz", (data) => {
-                        startQuiz(data);
-                    });
-
-                    socket.on("end_quiz", () => {
-                        // get last char of question_container.selectedOption.name
-                        let option = null;
-                        if (question_container.selectedOption) {
-                            option = parseInt(question_container.selectedOption.name.charAt(question_container.selectedOption.name.length - 1));
-                        }
-                        socket.emit('quiz_answer', {id: socket.id, option: option});
-
-                    });
-
-                    socket.on('eval_answer', (player_id, isCorrect) => {
-                        // console.log('Correct answer player:', player_id);
-                        showAnimationFromPlayer(player_id, isCorrect);
-                    });
-
-
-                    socket.on('add_player', (new_player, all_players) => {
-                        if (new_player.id === socket.id) return;
-                        console.log('Other players:', otherPlayers);
-
-                        // Erstelle einen neuen Avatar für den Spieler
-                        const otherPlayerGroup = new THREE.Group();
-                        let player_dolly = all_players.find(player => player.id === socket.id);
-                        // Lade das FBX-Modell für den Spieler
-                        if (!player_dolly) {
-                            console.error('Player not found');
-                            return;
-                        }
-                        spawnCharacterAt(new_player, {x: 0, y: 0, z: 0});
-                        // Speichere die Gruppe im `otherPlayers`-Objekt
-                    });
-
-
-                    socket.on("update_character", (data) => {
-                        if (otherPlayers[data.id] && data.id !== socket.id) {
-                            // console.log('Update position clientside NON SELF:', data);
-                            otherPlayers[data.id].position.copy(data.state.position);
-                            otherPlayers[data.id].rotation.set(data.state.rotation.x, data.state.rotation.y, data.state.rotation.z);
-                            otherPlayers[data.id].currentAnimationName = data.state.animation;
-                            // console.log('Update rotation clientside:', data.state.rotation);
-                            try {
-                                if (data.state.arms.leftArm) {
-                                    otherPlayers[data.id].leftArm.rotation.fromArray(data.state.arms.leftArm);
-                                }
-                                if (data.state.arms.rightArm) {
-                                    otherPlayers[data.id].rightArm.rotation.fromArray(data.state.arms.rightArm);
-                                }
-                            } catch (e) {
-                                console.log(e);
-                            }
-
-
-                        }
-                    });
-
-                    socket.on("remove_player", (socket_id) => {
-                        scene.remove(otherPlayers[socket_id]);
-                        delete otherPlayers[socket_id];
-                        console.log('Removed player:', socket_id);
-                    });
-
-                    socket.on('player_joined', (players) => {
-                        console.log('initialize_players:', players);
-                        players.forEach(player => {
-                            if (player.id === socket.id) return;
-                            spawnCharacterAt(player, {x: 0, y: 0, z: 0});
-                        });
-                    });
-
-                    const btnDict = VRButton.createButton(renderer, sessionOptions, onSelectStart, onSelectEnd, onSessionStart, onSessionEnd);
+                    const btnDict = MyXRButton.createButton(renderer,"immersive-vr", "VR", sessionOptions, onSelectStart, onSelectEnd, onSessionStart, onSessionEnd);
                     document.body.appendChild(btnDict.button);
                     referenceSpace = btnDict.referenceSpace;
+                    if (!supported) {
+                        navigator.xr.isSessionSupported('immersive-ar').then((supported) => {
+                            if (supported) {
+                                console.log('AR wird unterstützt');
+                                isARAvailable = supported;
+                                const btnDict = MyXRButton.createButton(renderer,"immersive-ar", "AR", sessionOptions, onSelectStart, onSelectEnd, onSessionStart, onSessionEnd);
+                                document.body.appendChild(btnDict.button);
+                                referenceSpace = btnDict.referenceSpace;
+                            }
+                        });
+                    }
                 }
+                socket = io.connect('https://' + ipv4 + ':' + server_port);
+                socket.on('connect', () => {
+                    console.log('Verbunden mit dem WebSocket-Server!');
+                });
+                socket.on("start_quiz", (data) => {
+                    startQuiz(data);
+                });
+                socket.on("end_quiz", () => {
+                    // get last char of question_container.selectedOption.name
+                    let option = null;
+                    if (question_container.selectedOption) {
+                        option = parseInt(question_container.selectedOption.name.charAt(question_container.selectedOption.name.length - 1));
+                    }
+                    socket.emit('quiz_answer', {id: socket.id, option: option});
+                });
+                socket.on('eval_answer', (player_id, isCorrect) => {
+                    // console.log('Correct answer player:', player_id);
+                    showAnimationFromPlayer(player_id, isCorrect);
+                });
+                socket.on('add_player', (new_player, all_players) => {
+                    if (new_player.id === socket.id) return;
+                    console.log('Other players:', otherPlayers);
+
+                    // Erstelle einen neuen Avatar für den Spieler
+                    const otherPlayerGroup = new THREE.Group();
+                    let player_dolly = all_players.find(player => player.id === socket.id);
+                    // Lade das FBX-Modell für den Spieler
+                    if (!player_dolly) {
+                        console.error('Player not found');
+                        return;
+                    }
+                    spawnCharacterAt(new_player, {x: 0, y: 0, z: 0});
+                    // Speichere die Gruppe im `otherPlayers`-Objekt
+                });
+                socket.on("update_character", (data) => {
+                    if (otherPlayers[data.id] && data.id !== socket.id) {
+                        // console.log('Update position clientside NON SELF:', data);
+                        otherPlayers[data.id].position.copy(data.state.position);
+                        otherPlayers[data.id].rotation.set(data.state.rotation.x, data.state.rotation.y, data.state.rotation.z);
+                        otherPlayers[data.id].currentAnimationName = data.state.animation;
+                        // console.log('Update rotation clientside:', data.state.rotation);
+                        try {
+                            if (data.state.arms.leftArm) {
+                                otherPlayers[data.id].leftArm.rotation.fromArray(data.state.arms.leftArm);
+                            }
+                            if (data.state.arms.rightArm) {
+                                otherPlayers[data.id].rightArm.rotation.fromArray(data.state.arms.rightArm);
+                            }
+                        } catch (e) {
+                            console.log(e);
+                        }
+
+
+                    }
+                });
+                socket.on("remove_player", (socket_id) => {
+                    scene.remove(otherPlayers[socket_id]);
+                    delete otherPlayers[socket_id];
+                    console.log('Removed player:', socket_id);
+                });
+                socket.on('player_joined', (players) => {
+                    console.log('initialize_players:', players);
+                    players.forEach(player => {
+                        if (player.id === socket.id) return;
+                        spawnCharacterAt(player, {x: 0, y: 0, z: 0});
+                    });
+                });
             });
     }
 }
