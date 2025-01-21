@@ -7,6 +7,8 @@ import {FBXLoader} from "three/examples/jsm/loaders/FBXLoader";
 import {interactableObjects} from "./models";
 import { Text } from 'troika-three-text';
 import { io } from 'socket.io-client';
+import {highlightShaderMaterial, shaderHighlightActiveQuiz} from "./shaders";
+
 export let socket,mysession, referenceSpace, dolly,reticleGeometry,reticleMaterial,reticle, isVideoPlaying = false,playButtonMaterial, video,playTexture,playButtonGeometry, videoMesh,videoTexture, playButtonMesh, videoMaterial, videoGeometry;
 let mixer;
 let otherPlayers = {};
@@ -32,6 +34,7 @@ const colors = {
 let current_question = null;
 
 let question_container = null;
+let character_url = 'assets/Idle.fbx';
 
 function resetQuestionContainer() {
     try {
@@ -88,24 +91,20 @@ function resetQuestionContainer() {
 function updateArms() {
     try {
         if (dolly.leftArm && dolly.rightArm) {
-            // const armOffset = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0)); // Offset für die Arme
             if (controller1) {
                 if (dolly.leftArm) {
                     dolly.leftArm.quaternion.copy(controller1.quaternion);
                 }
             }
-
             if (controller2) {
                 if (dolly.rightArm) {
                     dolly.rightArm.quaternion.copy(controller2.quaternion);
                 }
-
             }
         }
     }catch (e) {
         console.log(e);
     }
-
 }
 window.addEventListener('blur', () => {
     console.log('Window lost focus');
@@ -127,28 +126,9 @@ function onSessionStart(session) {
     dolly.add(camera); // Füge die Kamera hinzu
     dolly.add(controllerGrip1);
     dolly.add(controllerGrip2)
-    scene.add(dolly);
     // lade eigenen Avatar
-    fbxLoader.load('assets/Idle.fbx', (object) => {
-        object.scale.set(0.01, 0.01, 0.01);
-        object.rotation.set(0, Math.PI, 0);
-        object.visible = false;
-        // Finde den Armknochen
-        dolly.leftArm = object.getObjectByName('mixamorig1LeftArm');
-        dolly.rightArm = object.getObjectByName('mixamorig1RightArm');
+    spawnCharacterAt(socket.id, {x: 8, y: 0, z: 0}, true);
 
-        if (dolly.rightArm && dolly.leftArm) {
-            console.log('Left Arm Bone:', dolly.leftArm);
-            console.log('Right Arm Bone:', dolly.rightArm);
-        }
-
-        dolly.position.set(8, 0, 0);
-        dolly.add(object);
-        mixer = new THREE.AnimationMixer(object);
-        const action = mixer.clipAction(object.animations[0]);
-        action.play();
-        console.log('Dolly loaded:', dolly);
-    });
 
     socket.emit('player_added', { dolly: dolly});
     // Create a video element
@@ -243,7 +223,7 @@ function onSessionStart(session) {
     highlightRaycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
 
     // Rufe regelmäßig `sendPlayerPosition` auf, um die eigene Position zu senden
-    setInterval(sendCharacterState, 100);
+    // setInterval(sendCharacterState, 20);
 
     setInterval(highlightRay, 100);
 
@@ -361,11 +341,35 @@ function teleport(controller) {
         reticle.visible = false; // Verstecke das Reticle
     }
 }
+function highLightQuizObject(name) {
+    interactableObjects.map((x) => x).map((child) => {
+        if (child.name.toLowerCase() === name) {
+            const boundingBox = new THREE.Box3().setFromObject(child);
+            const boxSize = new THREE.Vector3();
+            boundingBox.getSize(boxSize); // Größe der BoundingBox
+            const boxCenter = new THREE.Vector3();
+            boundingBox.getCenter(boxCenter); // Zentrum der BoundingBox
+            const highlightGeometry = new THREE.SphereGeometry(boxSize.length() / 2.5, 32, 32);
+            const highlight = new THREE.Mesh(highlightGeometry, shaderHighlightActiveQuiz);
+
+            highlight.position.copy(boxCenter)
+            highlight.renderOrder = 1; // So wird Text immer sichtbar
+            scene.add(highlight);
+            setInterval(() => {
+                scene.remove(highlight);
+            }, 10000);
+            return child;
+        }
+    });
+
+
+}
 
 function startQuiz(data) {
     resetQuestionContainer();
     playAudioAt(question_container.soundSource,'./assets/media/sound/quiz_bell.mp3');
     let counter = 10;
+    highLightQuizObject(data.name);
     const timer = setInterval(() => {
         if (counter > 0) {
             console.log('Time remaining:', counter);
@@ -498,27 +502,14 @@ export function initVR() {
 
                         // Erstelle einen neuen Avatar für den Spieler
                         const otherPlayerGroup = new THREE.Group();
-
+                        let player_dolly = all_players.find(player => player.id === socket.id);
                         // Lade das FBX-Modell für den Spieler
-                        fbxLoader.load('assets/Idle.fbx', (object) => {
-                            object.scale.set(0.01, 0.01, 0.01);
-                            object.rotation.set(0, Math.PI, 0);
-                            otherPlayerGroup.leftArm = object.getObjectByName('mixamorig1LeftArm');
-                            otherPlayerGroup.rightArm = object.getObjectByName('mixamorig1RightArm');
-                            // Füge das Modell zur Gruppe hinzu
-                            otherPlayerGroup.add(object);
-
-                            // Setze die anfängliche Position und Rotation basierend auf den empfangenen Daten
-                            otherPlayerGroup.position.set(0, 0, 0);
-
-                            // Füge den Spieler zur Szene hinzu
-                            scene.add(otherPlayerGroup);
-
-                            console.log(`Player ${new_player.id} added to the scene.`);
-                        });
-
+                        if (!player_dolly) {
+                            console.error('Player not found');
+                            return;
+                        }
+                        spawnCharacterAt(new_player, {x: 0, y: 0, z: 0});
                         // Speichere die Gruppe im `otherPlayers`-Objekt
-                        otherPlayers[new_player.id] = otherPlayerGroup;
                     });
 
 
@@ -551,21 +542,11 @@ export function initVR() {
                         console.log('Removed player:', socket_id);
                     });
 
-                    socket.on('initialize_players', (players) => {
+                    socket.on('player_joined', (players) => {
                         console.log('initialize_players:', players);
                         players.forEach(player => {
                             if (player.id === socket.id) return;
-                            const otherPlayerGroup = new THREE.Group();
-                            fbxLoader.load('assets/Idle.fbx', (object) => {
-                                object.scale.set(0.01, 0.01, 0.01);
-                                object.rotation.set(0, Math.PI, 0);
-                                otherPlayerGroup.leftArm = object.getObjectByName('mixamorig1LeftArm');
-                                otherPlayerGroup.rightArm = object.getObjectByName('mixamorig1RightArm');
-                                otherPlayerGroup.add(object);
-                                otherPlayerGroup.position.set(0, 0, 0);
-                                scene.add(otherPlayerGroup);
-                            });
-                            otherPlayers[player.id] = otherPlayerGroup;
+                            spawnCharacterAt(player, {x: 0, y: 0, z: 0});
                         });
                     });
 
@@ -575,8 +556,57 @@ export function initVR() {
                 }
             });
     }
+}
 
+function spawnCharacterAt(player, position, isSelf = false) {
+    let currentGroup;
+    if (isSelf) {
+        currentGroup = dolly;
+    }
+    else {
+        currentGroup = new THREE.Group();
+    }
 
+    fbxLoader.load(character_url, (object) => {
+        object.scale.set(0.01, 0.01, 0.01);
+        object.rotation.set(0, Math.PI, 0);
+        let arms = findArms(object);
+        let leftArmBone = arms.leftArm;
+        let rightArmBone = arms.rightArm;
+        currentGroup.leftArm = leftArmBone;
+        currentGroup.rightArm = rightArmBone;
+        if (isSelf) {
+            object.visible = false;
+            mixer = new THREE.AnimationMixer(object);
+            const action = mixer.clipAction(object.animations[0]);
+            action.play();
+        }
+        currentGroup.add(object);
+        currentGroup.position.set(position.x, position.y, position.z);
+        scene.add(currentGroup);
+    });
+    if (!isSelf) otherPlayers[player.id] = currentGroup;
+}
+
+function findArms(object) {
+    const armBones = {
+        leftArm: null,
+        rightArm: null,
+    };
+
+    object.traverse((child) => {
+        if (child.isBone) {
+            // if includes leftarm or rightarm
+            if (child.name.toLowerCase().includes('leftarm')) {
+                armBones.leftArm = child;
+                console.log('Left arm:', child);
+            }
+            if (child.name.toLowerCase().includes('rightarm')) {
+                armBones.rightArm = child;
+            }
+        }
+    });
+    return armBones;
 }
 
 function handleHighlightedObject(currentObject){
@@ -626,28 +656,7 @@ function handleHighlightedObject(currentObject){
     scene.add(currentHighlightGroup);
 }
 
-const highlightShaderMaterial = new THREE.ShaderMaterial({
-    uniforms: {
-        glowColor: { value: new THREE.Color(0x00ff00) }, // Highlight-Farbe
-    },
-    vertexShader: `
-        varying vec3 vNormal;
-        void main() {
-            vNormal = normalize(normalMatrix * normal);
-            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        }
-    `,
-    fragmentShader: `
-        varying vec3 vNormal;
-        uniform vec3 glowColor;
-        void main() {
-            float intensity = pow(1.0 - dot(vNormal, vec3(0.0, 0.0, 1.0)), 2.0);
-            gl_FragColor = vec4(glowColor, intensity);
-        }
-    `,
-    side: THREE.FrontSide,
-    transparent: true,
-});
+
 
 function highlightRay() {
     tempMatrixHighlight.identity().extractRotation(controller1.matrixWorld);
@@ -667,7 +676,7 @@ function highlightRay() {
 
             while (currentObject) {
                 if (!currentHighlightGroup) {
-                    if (currentObject.name === "lambo") {
+                    if (currentObject.name === "lambo" || currentObject.name === "helmet") {
                         handleHighlightedObject(currentObject);
                         return;
                     }
@@ -719,17 +728,16 @@ function button_hover(currentObject) {
 }
 
 function render(time) {
-    // highlightRay();
     if (mixer)  mixer.update(0.016); // 16ms für eine 60FPS-Rate
     updateArms(dolly.leftArm, dolly.rightArm);
-    turnCharacter();
+    moveCharacter();
+    sendCharacterState();
     ThreeMeshUI.update();
     renderer.xr.updateCamera(camera);
-
     renderer.render(scene, camera);
 }
 
-function turnCharacter() {
+function moveCharacter() {
     try {
         let thumpstick_axes1 =  controller1.userData.inputSource.gamepad.axes;
         let thumpstick_axes2 =  controller2.userData.inputSource.gamepad.axes;
@@ -771,6 +779,10 @@ function induceControllerRay(controller) {
         switch (currentHighlightGroup.currentObject) {
             case "lambo":
                 console.log("Requesting quiz for lambo");
+                socket.emit('request_quiz', {player_id: socket.id, exponat: currentHighlightGroup.currentObject});
+                break;
+            case "helmet":
+                console.log("Requesting quiz for helmet");
                 socket.emit('request_quiz', {player_id: socket.id, exponat: currentHighlightGroup.currentObject});
                 break;
             default:

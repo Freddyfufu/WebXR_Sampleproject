@@ -35,7 +35,7 @@ const io = socketIo(server, {
 
 io.on('connection', (socket) => {
     console.log('A player has connected.');
-    socket.emit('initialize_players', players);
+    socket.emit('player_joined', players);
 
     socket.on('player_added', (data) => {
         if (!data.dolly) {
@@ -79,7 +79,7 @@ io.on('connection', (socket) => {
         console.log(data)
         console.log('Quiz requested');
         quiz = quizQuestions[data.exponat];
-        let quiz_to_users = { question: quiz.question, options: quiz.options };
+        let quiz_to_users = {name:data.exponat, question: quiz.question, options: quiz.options };
         console.log(quiz);
         io.emit('start_quiz', quiz_to_users);
         // start timer
@@ -100,10 +100,7 @@ io.on('connection', (socket) => {
     });
 
 
-    // socket.on('update_position', (data) => {
-    //     // Weiterleiten der Positionsdaten an alle anderen Spieler
-    //     socket.broadcast.emit('update_position', data);
-    // });
+
     socket.on('update_character', (data) => {
         socket.broadcast.emit('update_character', data);
     });

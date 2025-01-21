@@ -44,14 +44,32 @@ export function loadModels() {
         model.position.set(5, 0.5, -5);
         // model.scale.set(3, 3, 3);
         model.rotation.y = Math.PI / 3;
-
         const textMesh = new Text();
         textMesh.text = 'Quiz starten!';
         textMesh.fontSize = 0.3;
         textMesh.color = 0x000000;
-        // textMesh.sync();
         model.myText = textMesh;
+        scene.add(model); // Modell zur Szene hinzufügen
 
+        interactableObjects.push(model);
+    }, undefined, function (error) {
+        console.error('An error happened:', error);
+    });
+
+    gltfLoader.load('assets/exponat/sci_fi_space_helmet.glb', (gltf) => {
+        const model = gltf.scene; // Das geladene Modell
+        model.name = 'helmet';
+
+        model.position.set(12, 0, -5);
+        // model.scale.set(3, 3, 3);
+        setInterval(() => {
+            model.rotation.y += 0.01;
+        }, 100);
+        const textMesh = new Text();
+        textMesh.text = 'Quiz starten!';
+        textMesh.fontSize = 0.3;
+        textMesh.color = 0x000000;
+        model.myText = textMesh;
         scene.add(model); // Modell zur Szene hinzufügen
 
         interactableObjects.push(model);
