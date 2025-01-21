@@ -7,8 +7,6 @@ import * as THREE from "three";
 import {FBXLoader} from "three/examples/jsm/loaders/FBXLoader";
 import {interactableObjects} from "./models";
 import { Text } from 'troika-three-text';
-import {makeQuizboard} from "./quizboard";
-
 import { io } from 'socket.io-client';
 export let socket,mysession, referenceSpace, dolly,reticleGeometry,reticleMaterial,reticle, isVideoPlaying = false,playButtonMaterial, video,playTexture,playButtonGeometry, videoMesh,videoTexture, playButtonMesh, videoMaterial, videoGeometry;
 let mixer;
@@ -27,50 +25,64 @@ const colors = {
     panelBack: 0x262626,
     button: 0x363636,
     hovered: 0xcccccc,
-    selected: 0x109c5d
+    selected: 0x109c5d,
+    wrong: 0xff0000,
+    correct: 0x00ff00
 };
 
-let question_container = null;
 let current_question = null;
 
+let question_container = null;
+
 function resetQuestionContainer() {
-    if (question_container) {
-        question_container.children.forEach((child) => {
-            question_container.remove(child);
+    try {
+        if (question_container) {
+            question_container.children.forEach((child) => {
+                question_container.remove(child);
+            });
+            scene.remove(question_container);
+            scene.remove(question_container.soundSource);
+        }
+
+        question_container = new ThreeMeshUI.Block({
+            width: 2.5,
+            height: 1.7,
+            padding: 0.1,
+            fontFamily: './assets/fonts/Roboto-msdf.json',
+            fontTexture: './assets/fonts/Roboto-msdf.png',
         });
-        scene.remove(question_container);
-        question_container = null;
+        question_container.name = 'question_container';
+        question_container.position.set(8, 3, -4); // Set the container's world position
+        question_container.selectedOption = null;
+        scene.add(question_container);
+
+
+        ThreeMeshUI.update();
+        renderer.renderLists.dispose();
+        // ThreeMeshUI.FontLibrary.addFont('./assets/fonts/Roboto-msdf.json', './assets/fonts/Roboto-msdf.png');
+
+
+        // Create the sound source
+        const soundSource = new THREE.Object3D();
+        question_container.add(soundSource);
+
+        // Add the question container to the scene
+        scene.add(question_container);
+
+        // Update world position of the sound source after adding to the scene
+        const worldPos = new THREE.Vector3();
+        soundSource.getWorldPosition(worldPos);
+
+        // soundSource.position.set(...worldPos);
+        console.log('Sound source local position:', soundSource.position);
+        console.log('Sound source world position:', worldPos);
+
+        // Store sound source in the container
+        question_container.soundSource = soundSource;
+    }catch (e)
+    {
+        console.log(e);
     }
-
-    // Create the question container
-    question_container = new ThreeMeshUI.Block({
-        width: 2.5,
-        height: 1.7,
-        padding: 0.1,
-        fontFamily: './assets/fonts/Roboto-msdf.json',
-        fontTexture: './assets/fonts/Roboto-msdf.png',
-    });
-    question_container.name = 'question_container';
-    question_container.position.set(8, 3, -4); // Set the container's world position
-    question_container.selectedOption = null;
-
-    // Create the sound source
-    const soundSource = new THREE.Object3D();
-    question_container.add(soundSource);
-
-    // Add the question container to the scene
-    scene.add(question_container);
-
-    // Update world position of the sound source after adding to the scene
-    const worldPos = new THREE.Vector3();
-    soundSource.getWorldPosition(worldPos);
-
-    // soundSource.position.set(...worldPos);
-    console.log('Sound source local position:', soundSource.position);
-    console.log('Sound source world position:', worldPos);
-
-    // Store sound source in the container
-    question_container.soundSource = soundSource;
 }
 
 function updateArms() {
@@ -308,7 +320,7 @@ function playAudioAt(soundSource, audioFile) {
     audioLoader.load(audioFile, function (buffer) {
         sound.setBuffer(buffer);
         sound.setRefDistance(2);// Distance at which the volume starts decreasing
-        sound.setVolume(10)
+        sound.setVolume(4)
         ; // Max volume
         sound.play();
     });
@@ -352,8 +364,16 @@ function teleport(controller) {
 
 function startQuiz(data) {
     resetQuestionContainer();
-    playAudioAt(question_container.soundSource,'./assets/media/sound/drums.ogg');
-
+    playAudioAt(question_container.soundSource,'./assets/media/sound/quiz_bell.mp3');
+    let counter = 10;
+    const timer = setInterval(() => {
+        if (counter > 0) {
+            console.log('Time remaining:', counter);
+            counter--;
+        } else {
+            clearInterval(timer);
+        }
+    }, 1000);
     console.log('Quiz started:', data);
     const questionText = data.question;
     const options = data.options;
@@ -364,8 +384,6 @@ function startQuiz(data) {
         padding: 1,
     });
     question_container.add( current_question );
-
-
     options.forEach((option, index) => {
         const optionButton = new ThreeMeshUI.Block({
             width: 2,
@@ -384,10 +402,49 @@ function startQuiz(data) {
         optionButton.state = 'idle';
         question_container.add(optionButton);
     });
+}
 
+function showAnimationFromPlayer(player_id, isCorrect) {
+        // create winning animation at players position
+    let player_dolly;
+    if (player_id !== socket.id) {
+        player_dolly = otherPlayers[player_id];
+    }
+    else if (player_id === socket.id) {
+        player_dolly = dolly;
+    }
+    else {
+        console.error('No player found');
+        return;
+    }
+    if (!player_dolly) {
+        resetQuestionContainer();
+        return;
+    }
+        let color;
+    switch (isCorrect) {
+        case true:
+            color = colors.correct;
+            break;
+        case false:
+            color = colors.wrong;
+            break;
+    }
+        const animationEffect = new THREE.Mesh(
+        new THREE.SphereGeometry(0.3, 16, 16),
+        new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.8 })
+    );
 
-
-
+    // Position the effect above the player character
+    const characterPosition = new THREE.Vector3();
+    player_dolly.getWorldPosition(characterPosition);
+    animationEffect.position.set(characterPosition.x, characterPosition.y + 2.0, characterPosition.z); // Adjust height
+    // destroy after 3 seconds
+    setTimeout(() => {
+        scene.remove(animationEffect);
+    }, 3000);
+    scene.add(animationEffect);
+    resetQuestionContainer();
 
 }
 
@@ -414,6 +471,21 @@ export function initVR() {
 
                     socket.on("start_quiz", (data) => {
                         startQuiz(data);
+                    });
+
+                    socket.on("end_quiz", () => {
+                        // get last char of question_container.selectedOption.name
+                        let option = null;
+                        if (question_container.selectedOption) {
+                            option = parseInt(question_container.selectedOption.name.charAt(question_container.selectedOption.name.length - 1));
+                        }
+                            socket.emit('quiz_answer', {id: socket.id, option: option});
+
+                    });
+
+                    socket.on('eval_answer', (player_id, isCorrect) => {
+                        // console.log('Correct answer player:', player_id);
+                        showAnimationFromPlayer(player_id, isCorrect);
                     });
 
 
@@ -449,11 +521,11 @@ export function initVR() {
 
                     socket.on("update_character", (data) => {
                         if (otherPlayers[data.id] && data.id !== socket.id) {
-                        console.log('Update position clientside NON SELF:', data);
+                        // console.log('Update position clientside NON SELF:', data);
                             otherPlayers[data.id].position.copy(data.state.position);
                             otherPlayers[data.id].rotation.set(data.state.rotation.x, data.state.rotation.y, data.state.rotation.z);
                             otherPlayers[data.id].currentAnimationName = data.state.animation;
-                            console.log('Update rotation clientside:', data.state.rotation);
+                            // console.log('Update rotation clientside:', data.state.rotation);
                             try {
                                 if (data.state.arms.leftArm) {
                                     otherPlayers[data.id].leftArm.rotation.fromArray(data.state.arms.leftArm);
@@ -744,6 +816,7 @@ function tryQuizButtonSelect(){
                         question_container.selectedOption.state = 'idle';
                     }
                     question_container.selectedOption = child;
+                    console.log('Selected option:', child.name);
                 }
             }
         })

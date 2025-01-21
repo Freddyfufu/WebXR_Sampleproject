@@ -23,6 +23,7 @@ const server = https.createServer({
 
 let players = [];
 let quiz_active = false;
+let quiz = {};
 
 const io = socketIo(server, {
     cors: {
@@ -62,6 +63,13 @@ io.on('connection', (socket) => {
     //         "options": ["500 Jahre", "1000 Jahre", "2000 Jahre", "3000 Jahre"],
     //         "correctAnswer": 3
     //          },
+
+    socket.on('quiz_answer', (data) => {
+        console.log('Quiz answer SERVER:', data);
+            io.emit('eval_answer', data.id, data.option === quiz.correctAnswer);
+            quiz_active = false;
+
+    });
     socket.on('request_quiz', (data) => {
         if (quiz_active) {
             console.log('Quiz already active');
@@ -70,11 +78,19 @@ io.on('connection', (socket) => {
         quiz_active = true;
         console.log(data)
         console.log('Quiz requested');
-        let quiz = quizQuestions[data.exponat];
+        quiz = quizQuestions[data.exponat];
+        let quiz_to_users = { question: quiz.question, options: quiz.options };
         console.log(quiz);
-        io.emit('start_quiz', quiz);
+        io.emit('start_quiz', quiz_to_users);
+        // start timer
+        setTimeout(() => {
+            quiz_active = false;
+            console.log('Quiz ended');
+            io.emit('end_quiz');
+        }, 10000);
+    }
+    );
 
-    });
 
     // Wenn der Spieler die Verbindung trennt, entferne ihn aus der Liste
     socket.on('disconnect', () => {
