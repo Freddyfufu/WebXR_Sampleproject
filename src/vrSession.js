@@ -1,15 +1,17 @@
-import { VRButton } from 'three/examples/jsm/webxr/VRButton.js';
-import { renderer, scene, camera } from './scene.js';
+import {VRButton} from 'three/examples/jsm/webxr/VRButton.js';
+import {renderer, scene, camera} from './scene.js';
 import {controller1, controller2, controllerGrip1, controllerGrip2, setupControllers} from './controllers.js';
 import * as ThreeMeshUI from "three-mesh-ui";
 import * as THREE from "three";
 import {FBXLoader} from "three/examples/jsm/loaders/FBXLoader";
 import {interactableObjects} from "./models";
-import { Text } from 'troika-three-text';
-import { io } from 'socket.io-client';
+import {Text} from 'troika-three-text';
+import {io} from 'socket.io-client';
 import {highlightShaderMaterial, shaderHighlightActiveQuiz} from "./shaders";
 
-export let socket,mysession, referenceSpace, dolly,reticleGeometry,reticleMaterial,reticle, isVideoPlaying = false,playButtonMaterial, video,playTexture,playButtonGeometry, videoMesh,videoTexture, playButtonMesh, videoMaterial, videoGeometry;
+export let socket, mysession, referenceSpace, dolly, reticleGeometry, reticleMaterial, reticle, isVideoPlaying = false,
+    playButtonMaterial, video, playTexture, playButtonGeometry, videoMesh, videoTexture, playButtonMesh, videoMaterial,
+    videoGeometry;
 let mixer;
 let otherPlayers = {};
 let isLongPress = false;
@@ -82,8 +84,7 @@ function resetQuestionContainer() {
 
         // Store sound source in the container
         question_container.soundSource = soundSource;
-    }catch (e)
-    {
+    } catch (e) {
         console.log(e);
     }
 }
@@ -102,17 +103,17 @@ function updateArms() {
                 }
             }
         }
-    }catch (e) {
+    } catch (e) {
         console.log(e);
     }
 }
+
 window.addEventListener('blur', () => {
     console.log('Window lost focus');
     // As a general rule you should mute any sounds your page is playing
     // whenever the page loses focus.
     // pauseAudio();
 });
-
 
 
 function onSessionStart(session) {
@@ -130,7 +131,7 @@ function onSessionStart(session) {
     spawnCharacterAt(socket.id, {x: 8, y: 0, z: 0}, true);
 
 
-    socket.emit('player_added', { dolly: dolly});
+    socket.emit('player_added', {dolly: dolly});
     // Create a video element
     video = document.createElement('video');
     video.loop = true;
@@ -142,7 +143,7 @@ function onSessionStart(session) {
     video.name = 'video';
 
     reticleGeometry = new THREE.RingGeometry(0.1, 0.15, 32); // Ring für das Reticle
-    reticleMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 }); // Gelbes Material
+    reticleMaterial = new THREE.MeshBasicMaterial({color: 0xffff00}); // Gelbes Material
     reticle = new THREE.Mesh(reticleGeometry, reticleMaterial);
     reticle.rotation.x = -Math.PI / 2; // Flach auf den Boden legen
     reticle.visible = false; // Standardmäßig unsichtbar
@@ -166,15 +167,15 @@ function onSessionStart(session) {
     videoTexture.format = THREE.RGBFormat;
 
     // Create a play button texture
-     playTexture = new THREE.TextureLoader().load('/assets/media/textures/play-button.png');
+    playTexture = new THREE.TextureLoader().load('/assets/media/textures/play-button.png');
 
 // Create a plane for the play button
-     playButtonGeometry = new THREE.PlaneGeometry(0.5, 0.5);
-     playButtonMaterial = new THREE.MeshBasicMaterial({
+    playButtonGeometry = new THREE.PlaneGeometry(0.5, 0.5);
+    playButtonMaterial = new THREE.MeshBasicMaterial({
         map: playTexture,
         transparent: true,
     });
-     playButtonMesh = new THREE.Mesh(playButtonGeometry, playButtonMaterial);
+    playButtonMesh = new THREE.Mesh(playButtonGeometry, playButtonMaterial);
     playButtonMesh.name = 'playButton';
 
 // Position and scale the play button
@@ -211,7 +212,7 @@ function onSessionStart(session) {
 
 
     const colliderGeometry = new THREE.PlaneGeometry(100, 100);
-    const colliderMaterial = new THREE.MeshBasicMaterial({ visible: false }); // Unsichtbares Material
+    const colliderMaterial = new THREE.MeshBasicMaterial({visible: false}); // Unsichtbares Material
     const groundCollider = new THREE.Mesh(colliderGeometry, colliderMaterial);
 
     groundCollider.rotation.x = -Math.PI / 2; // Liegt flach auf dem Boden
@@ -259,21 +260,18 @@ function onSelectEnd(event) {
         // Langes Drücken: Markierung (rechts), Gegenstand bewegen (links)
         if (event.inputSource === controller2.userData.inputSource) {
             // rechts, lange drücken (Markierung)
-        }
-        else if (event.inputSource === controller1.userData.inputSource) { // links, lange drücken (Gegenstand bewegen)
+        } else if (event.inputSource === controller1.userData.inputSource) { // links, lange drücken (Gegenstand bewegen)
         }
         console.log('Long press');
-    }
-    else { // Kurzes Drücken: Verschiedene Aktionen (links), teleportieren (rechts)
+    } else { // Kurzes Drücken: Verschiedene Aktionen (links), teleportieren (rechts)
         if (event.inputSource === controller1.userData.inputSource) { // links, kurzes drücken
             induceControllerRay(controller1);
-        }
-        else if (event.inputSource === controller2.userData.inputSource) { // rechts, kurzes drücken (teleportieren)
+        } else if (event.inputSource === controller2.userData.inputSource) { // rechts, kurzes drücken (teleportieren)
             teleport(controller2);
 
         }
 
-}
+    }
 
     isLongPress = false; // Zurücksetzen
 }
@@ -329,18 +327,20 @@ function teleport(controller) {
     if (intersects.length > 0) {
         line.material.color.set(0xffff00); // Strahl färben
         for (let i = 0; i < intersects.length; i++) {
-            if(intersects[i].object.name === "MyGround"){ // Wenn der Boden getroffen wurde ...
+            // FIXME: szenen mesh baken und nur danach prüfen
+            if (intersects[i].object.name === "ground") { // Wenn der Boden getroffen wurde ...
                 reticle.position.copy(intersects[i].point);
                 reticle.position.y = 0.01; // Etwas über dem Boden
                 reticle.visible = true; // Zeige das Reticle an
                 dolly.position.copy(reticle.position);
                 dolly.updateMatrixWorld(true);
-            }}
-    }
-    else {
+            }
+        }
+    } else {
         reticle.visible = false; // Verstecke das Reticle
     }
 }
+
 function highLightQuizObject(name) {
     interactableObjects.map((x) => x).map((child) => {
         if (child.name.toLowerCase() === name) {
@@ -367,7 +367,7 @@ function highLightQuizObject(name) {
 
 function startQuiz(data) {
     resetQuestionContainer();
-    playAudioAt(question_container.soundSource,'./assets/media/sound/quiz_bell.mp3');
+    playAudioAt(question_container.soundSource, './assets/media/sound/quiz_bell.mp3');
     let counter = 10;
     highLightQuizObject(data.name);
     const timer = setInterval(() => {
@@ -389,7 +389,7 @@ function startQuiz(data) {
         backgroundColor: new THREE.Color(0x000000),
     });
     current_question.position.set(0, 0.8, 0);
-    question_container.add( current_question );
+    question_container.add(current_question);
     options.forEach((option, index) => {
         const optionButton = new ThreeMeshUI.Block({
             width: 2,
@@ -405,22 +405,20 @@ function startQuiz(data) {
             fontSize: 0.1,
         });
         optionButton.add(optionText);
-        optionButton.name = 'option' + (index+1);
+        optionButton.name = 'option' + (index + 1);
         optionButton.state = 'idle';
         question_container.add(optionButton);
     });
 }
 
 function showAnimationFromPlayer(player_id, isCorrect) {
-        // create winning animation at players position
+    // create winning animation at players position
     let player_dolly;
     if (player_id !== socket.id) {
         player_dolly = otherPlayers[player_id];
-    }
-    else if (player_id === socket.id) {
+    } else if (player_id === socket.id) {
         player_dolly = dolly;
-    }
-    else {
+    } else {
         console.error('No player found');
         return;
     }
@@ -428,7 +426,7 @@ function showAnimationFromPlayer(player_id, isCorrect) {
         resetQuestionContainer();
         return;
     }
-        let color;
+    let color;
     switch (isCorrect) {
         case true:
             color = colors.correct;
@@ -437,20 +435,20 @@ function showAnimationFromPlayer(player_id, isCorrect) {
             color = colors.wrong;
             break;
     }
-        const animationEffect = new THREE.Mesh(
+    const animationEffect = new THREE.Mesh(
         new THREE.SphereGeometry(0.3, 16, 16),
-        new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.8 })
+        new THREE.MeshBasicMaterial({color: color, transparent: true, opacity: 0.8})
     );
 
     // Position the effect above the player character
-    const characterPosition = new THREE.Vector3();
-    player_dolly.getWorldPosition(characterPosition);
-    animationEffect.position.set(characterPosition.x, characterPosition.y + 2.0, characterPosition.z); // Adjust height
+    // const characterPosition = new THREE.Vector3();
+    // player_dolly.getWorldPosition(characterPosition);
     // destroy after 3 seconds
     setTimeout(() => {
-        scene.remove(animationEffect);
+        player_dolly.remove(animationEffect);
     }, 3000);
-    scene.add(animationEffect);
+    player_dolly.add(animationEffect);
+    animationEffect.position.set(0, 2, 0);
     resetQuestionContainer();
 
 }
@@ -486,7 +484,7 @@ export function initVR() {
                         if (question_container.selectedOption) {
                             option = parseInt(question_container.selectedOption.name.charAt(question_container.selectedOption.name.length - 1));
                         }
-                            socket.emit('quiz_answer', {id: socket.id, option: option});
+                        socket.emit('quiz_answer', {id: socket.id, option: option});
 
                     });
 
@@ -515,7 +513,7 @@ export function initVR() {
 
                     socket.on("update_character", (data) => {
                         if (otherPlayers[data.id] && data.id !== socket.id) {
-                        // console.log('Update position clientside NON SELF:', data);
+                            // console.log('Update position clientside NON SELF:', data);
                             otherPlayers[data.id].position.copy(data.state.position);
                             otherPlayers[data.id].rotation.set(data.state.rotation.x, data.state.rotation.y, data.state.rotation.z);
                             otherPlayers[data.id].currentAnimationName = data.state.animation;
@@ -530,7 +528,6 @@ export function initVR() {
                             } catch (e) {
                                 console.log(e);
                             }
-
 
 
                         }
@@ -562,8 +559,7 @@ function spawnCharacterAt(player, position, isSelf = false) {
     let currentGroup;
     if (isSelf) {
         currentGroup = dolly;
-    }
-    else {
+    } else {
         currentGroup = new THREE.Group();
     }
 
@@ -609,7 +605,7 @@ function findArms(object) {
     return armBones;
 }
 
-function handleHighlightedObject(currentObject){
+function handleHighlightedObject(currentObject) {
     // Berechne die BoundingBox des Objekts
     const boundingBox = new THREE.Box3().setFromObject(currentObject);
     const boxSize = new THREE.Vector3();
@@ -657,14 +653,13 @@ function handleHighlightedObject(currentObject){
 }
 
 
-
 function highlightRay() {
     tempMatrixHighlight.identity().extractRotation(controller1.matrixWorld);
     highlightRaycaster.ray.origin.setFromMatrixPosition(controller1.matrixWorld);
     highlightRaycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrixHighlight);
     let proxyObjects = interactableObjects.map((x) => x);
     if (question_container) {
-    proxyObjects = interactableObjects.concat(question_container);
+        proxyObjects = interactableObjects.concat(question_container);
     }
     let intersects = highlightRaycaster.intersectObjects(proxyObjects, true);
     let btn_hovered = false;
@@ -688,8 +683,7 @@ function highlightRay() {
                     btn_hovered = true;
                     // console.log('Option getroffen:', currentObject.name);
                     return;
-                }
-                else {
+                } else {
                     button_hover(null);
                 }
                 currentObject = currentObject.parent;
@@ -698,13 +692,14 @@ function highlightRay() {
                 }
             }
         }
-    }
-    else{
+    } else {
         scene.remove(currentHighlightMesh);
         scene.remove(currentHighlightGroup);
+        button_hover(null);
         currentHighlightGroup = null;
     }
 }
+
 function button_hover(currentObject) {
     if (!currentObject) {
         question_container.children.forEach((child) => {
@@ -728,7 +723,7 @@ function button_hover(currentObject) {
 }
 
 function render(time) {
-    if (mixer)  mixer.update(0.016); // 16ms für eine 60FPS-Rate
+    if (mixer) mixer.update(0.016); // 16ms für eine 60FPS-Rate
     updateArms(dolly.leftArm, dolly.rightArm);
     moveCharacter();
     sendCharacterState();
@@ -739,8 +734,8 @@ function render(time) {
 
 function moveCharacter() {
     try {
-        let thumpstick_axes1 =  controller1.userData.inputSource.gamepad.axes;
-        let thumpstick_axes2 =  controller2.userData.inputSource.gamepad.axes;
+        let thumpstick_axes1 = controller1.userData.inputSource.gamepad.axes;
+        let thumpstick_axes2 = controller2.userData.inputSource.gamepad.axes;
         if (thumpstick_axes1[3] > 0.5) {
             dolly.translateZ(0.1);
         }
@@ -766,12 +761,10 @@ function moveCharacter() {
         if (thumpstick_axes2[2] < -0.5) {
             dolly.rotateY(0.05);
         }
-    }
-    catch (e) {
+    } catch (e) {
         console.log(e);
     }
 }
-
 
 
 function induceControllerRay(controller) {
@@ -790,7 +783,7 @@ function induceControllerRay(controller) {
         }
         return;
     }
-  if (!controller) {
+    if (!controller) {
         console.error('Controller ist nicht definiert');
         return;
     }
@@ -819,11 +812,11 @@ function induceControllerRay(controller) {
                 currentObject = currentObject.parent;
             }
 
-          }
+        }
     }
 }
 
-function tryQuizButtonSelect(){
+function tryQuizButtonSelect() {
     if (question_container) {
         question_container.children.forEach((child) => {
             if (child.name.startsWith("option")) {

@@ -34,7 +34,8 @@ const io = socketIo(server, {
 });
 
 io.on('connection', (socket) => {
-    console.log('A player has connected.');
+    const userAgent = socket.handshake.headers['user-agent'];
+    console.log('Neuer Spieler verbunden mit User-Agent:', userAgent);
     socket.emit('player_joined', players);
 
     socket.on('player_added', (data) => {
@@ -43,12 +44,12 @@ io.on('connection', (socket) => {
             return;
         }
         console.log('Player added:', data);
-        let newPlayer = { id: socket.id, dolly: data.dolly };
+        let newPlayer = {id: socket.id, dolly: data.dolly};
         players.push(newPlayer);
         console.log("All players:", players);
         socket.broadcast.emit("add_player", newPlayer, players);
         // only send to the new player to update the other players
-});
+    });
     socket.on("player_removed", (socket_id) => {
         console.log('Player removed:', socket_id.socket_id);
         players = players.filter(player => player.id !== socket_id.socket_id);
@@ -57,38 +58,31 @@ io.on('connection', (socket) => {
         // socket.emit('update_players', {players:players, removed:socket_id.socket_id});
     });
 
-
-    //      "lambo": {
-    //          "question": "Wann wurde das dargestellte Gebäude gebaut?",
-    //         "options": ["500 Jahre", "1000 Jahre", "2000 Jahre", "3000 Jahre"],
-    //         "correctAnswer": 3
-    //          },
-
     socket.on('quiz_answer', (data) => {
         console.log('Quiz answer SERVER:', data);
-            io.emit('eval_answer', data.id, data.option === quiz.correctAnswer);
-            quiz_active = false;
+        io.emit('eval_answer', data.id, data.option === quiz.correctAnswer);
+        quiz_active = false;
 
     });
     socket.on('request_quiz', (data) => {
-        if (quiz_active) {
-            console.log('Quiz already active');
-            return;
+            if (quiz_active) {
+                console.log('Quiz already active');
+                return;
+            }
+            quiz_active = true;
+            console.log(data)
+            console.log('Quiz requested');
+            quiz = quizQuestions[data.exponat];
+            let quiz_to_users = {name: data.exponat, question: quiz.question, options: quiz.options};
+            console.log(quiz);
+            io.emit('start_quiz', quiz_to_users);
+            // start timer
+            setTimeout(() => {
+                quiz_active = false;
+                console.log('Quiz ended');
+                io.emit('end_quiz');
+            }, 10000);
         }
-        quiz_active = true;
-        console.log(data)
-        console.log('Quiz requested');
-        quiz = quizQuestions[data.exponat];
-        let quiz_to_users = {name:data.exponat, question: quiz.question, options: quiz.options };
-        console.log(quiz);
-        io.emit('start_quiz', quiz_to_users);
-        // start timer
-        setTimeout(() => {
-            quiz_active = false;
-            console.log('Quiz ended');
-            io.emit('end_quiz');
-        }, 10000);
-    }
     );
 
 
@@ -98,7 +92,6 @@ io.on('connection', (socket) => {
         players = players.filter(player => player.id !== socket.id); // Entferne den Spieler
         socket.broadcast.emit('remove_player', socket.id);
     });
-
 
 
     socket.on('update_character', (data) => {
