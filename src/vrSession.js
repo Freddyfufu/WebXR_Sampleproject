@@ -1,4 +1,3 @@
-// vrSession.js
 import { VRButton } from 'three/examples/jsm/webxr/VRButton.js';
 import { renderer, scene, camera } from './scene.js';
 import {controller1, controller2, controllerGrip1, controllerGrip2, setupControllers} from './controllers.js';
@@ -22,10 +21,10 @@ let currentHighlightMesh = null;
 let currentHighlightGroup = null;
 
 const colors = {
-    panelBack: 0x262626,
-    button: 0x363636,
+    panelBack: 0x010101,
+    button: 0x888888,
     hovered: 0xcccccc,
-    selected: 0x109c5d,
+    selected: 0x4b75c9,
     wrong: 0xff0000,
     correct: 0x00ff00
 };
@@ -41,25 +40,27 @@ function resetQuestionContainer() {
                 question_container.remove(child);
             });
             scene.remove(question_container);
+
             scene.remove(question_container.soundSource);
         }
 
         question_container = new ThreeMeshUI.Block({
             width: 2.5,
-            height: 1.7,
+            height: 1.4,
             padding: 0.1,
             fontFamily: './assets/fonts/Roboto-msdf.json',
             fontTexture: './assets/fonts/Roboto-msdf.png',
+            backgroundColor: new THREE.Color(colors.panelBack),
+            // backgroundOpacity: 0.5,
         });
         question_container.name = 'question_container';
-        question_container.position.set(8, 3, -4); // Set the container's world position
+        question_container.position.set(8, 3, -7); // Set the container's world position
         question_container.selectedOption = null;
         scene.add(question_container);
 
 
         ThreeMeshUI.update();
         renderer.renderLists.dispose();
-        // ThreeMeshUI.FontLibrary.addFont('./assets/fonts/Roboto-msdf.json', './assets/fonts/Roboto-msdf.png');
 
 
         // Create the sound source
@@ -73,7 +74,6 @@ function resetQuestionContainer() {
         const worldPos = new THREE.Vector3();
         soundSource.getWorldPosition(worldPos);
 
-        // soundSource.position.set(...worldPos);
         console.log('Sound source local position:', soundSource.position);
         console.log('Sound source world position:', worldPos);
 
@@ -321,7 +321,7 @@ function playAudioAt(soundSource, audioFile) {
         sound.setBuffer(buffer);
         sound.setRefDistance(2);// Distance at which the volume starts decreasing
         sound.setVolume(4)
-        ; // Max volume
+        ;
         sound.play();
     });
 }
@@ -379,10 +379,12 @@ function startQuiz(data) {
     const options = data.options;
     current_question = new ThreeMeshUI.Text({
         content: questionText,
-        fontSize: 0.1,
+        fontSize: 0.2,
         width: 2.4,
         padding: 1,
+        backgroundColor: new THREE.Color(0x000000),
     });
+    current_question.position.set(0, 0.8, 0);
     question_container.add( current_question );
     options.forEach((option, index) => {
         const optionButton = new ThreeMeshUI.Block({
@@ -392,6 +394,7 @@ function startQuiz(data) {
             fontFamily: './assets/fonts/Roboto-msdf.json',
             fontTexture: './assets/fonts/Roboto-msdf.png',
             backgroundColor: new THREE.Color(colors.button),
+            borderRadius: 0.1,
         });
         const optionText = new ThreeMeshUI.Text({
             content: option,
@@ -655,6 +658,7 @@ function highlightRay() {
     proxyObjects = interactableObjects.concat(question_container);
     }
     let intersects = highlightRaycaster.intersectObjects(proxyObjects, true);
+    let btn_hovered = false;
     if (intersects.length > 0) {
         for (let i = 0; i < intersects.length; i++) {
             const intersectedObject = intersects[i].object;
@@ -672,6 +676,7 @@ function highlightRay() {
                 // handle quizboard options
                 if (currentObject.name.startsWith('option')) {
                     button_hover(currentObject);
+                    btn_hovered = true;
                     // console.log('Option getroffen:', currentObject.name);
                     return;
                 }
@@ -679,6 +684,9 @@ function highlightRay() {
                     button_hover(null);
                 }
                 currentObject = currentObject.parent;
+                if (!btn_hovered) {
+                    button_hover(null);
+                }
             }
         }
     }
