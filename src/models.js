@@ -20,16 +20,7 @@ export function loadModels() {
 
     const gltfLoader = new GLTFLoader();
     gltfLoader.setDRACOLoader(dracoLoader);
-
-
-    gltfLoader.load('assets/home4.glb', (gltf) => {
-        const model = gltf.scene; // Das geladene Modell
-        scene.add(model); // Modell zur Szene hinzufügen
-    }, undefined, function (error) {
-        console.error('An error happened:', error);
-    });
-
-    gltfLoader.load('assets/hall2.glb', (gltf) => {
+    gltfLoader.load('assets/hall_empty.glb', (gltf) => {
         const model = gltf.scene; // Das geladene Modell
         model.position.set(7, 0, 0);
         scene.add(model); // Modell zur Szene hinzufügen
@@ -64,7 +55,7 @@ export function loadModels() {
         // model.scale.set(3, 3, 3);
         setInterval(() => {
             model.rotation.y += 0.01;
-        }, 100);
+        }, 50);
         const textMesh = new Text();
         textMesh.text = 'Quiz starten!';
         textMesh.fontSize = 0.3;

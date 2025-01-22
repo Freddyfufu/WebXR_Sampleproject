@@ -1,24 +1,22 @@
-
-
 class MyXRButton {
-    static createButton( renderer,xr_string, btn_string, sessionInit = {}, cbOnSelectStart, cbOnSelectEnd, cbOnSessionStart, cbOnSessionEnd ) {
-        const button = document.createElement( 'button' );
+    static createButton(renderer, xr_string, btn_string, sessionInit = {}, cbOnSelectStart, cbOnSelectEnd, cbOnSessionStart, cbOnSessionEnd) {
+        const button = document.createElement('button');
         let myrefspace = null;
         let mySession = null;
 
-        function showEnterVR( /*device*/ ) {
-            async function onSessionStarted( session ) {
-
-                await renderer.xr.setSession( session );
+        function showEnterVR( /*device*/) {
+            async function onSessionStarted(session) {
+                console.log('MyVRButton.js: onSessionStarted() - session:', session);
+                await renderer.xr.setSession(session);
                 renderer.xr.enabled = true;
                 button.textContent = 'EXIT' + btn_string;
                 mySession = session;
                 session.requestReferenceSpace("local").then((refSpace) => {
                     myrefspace = refSpace;
-                    // …
+                    console.log("Reference space set to: ", refSpace);
                 });
                 cbOnSessionStart(session);
-                session.addEventListener( 'end', onSessionEnded );
+                session.addEventListener('end', onSessionEnded);
                 mySession.addEventListener('selectstart', cbOnSelectStart);
                 mySession.addEventListener('selectend', cbOnSelectEnd);
                 // mySession.addEventListener('start', cbOnSessionStart);
@@ -27,10 +25,9 @@ class MyXRButton {
 
 
                 console.log('MyVRButton.js: onSessionStarted() - MyVRButton.referenceSpace:', myrefspace);
-
             }
 
-            function onSessionEnded( /*event*/ ) {
+            function onSessionEnded( /*event*/) {
 
                 // currentSession.removeEventListener( 'end', onSessionEnded );
 
@@ -40,64 +37,46 @@ class MyXRButton {
 
             }
 
-            //
-
             button.style.display = '';
-
             button.style.cursor = 'pointer';
             button.style.left = 'calc(50% - 50px)';
             button.style.width = '100px';
 
             button.textContent = 'ENTER ' + btn_string;
 
-            // WebXR's requestReferenceSpace only works if the corresponding feature
-            // was requested at session creation time. For simplicity, just ask for
-            // the interesting ones as optional features, but be aware that the
-            // requestReferenceSpace call will fail if it turns out to be unavailable.
-            // ('local' is always available for immersive sessions and doesn't need to
-            // be requested separately.)
 
             const sessionOptions = {
                 ...sessionInit,
                 optionalFeatures: [
-                    'local-floor',
+
                     'bounded-floor',
                     'layers',
-                    ...( sessionInit.optionalFeatures || [] )
+                    ...(sessionInit.optionalFeatures || [])
                 ],
             };
 
             button.onmouseenter = function () {
-
                 button.style.opacity = '1.0';
-
             };
 
             button.onmouseleave = function () {
-
                 button.style.opacity = '0.5';
-
             };
 
             button.onclick = function () {
-
-                if ( mySession === null ) {
-
-                    navigator.xr.requestSession( xr_string, sessionOptions ).then( onSessionStarted );
-
+                if (mySession === null) {
+                    navigator.xr.requestSession(xr_string, sessionOptions).then(onSessionStarted);
                 } else {
-
                     mySession.end();
+                    if (navigator.xr.offerSession !== undefined) {
 
-                    if ( navigator.xr.offerSession !== undefined ) {
+                        navigator.xr.offerSession(xr_string, sessionOptions)
+                            .then(onSessionStarted)
+                            .catch((err) => {
 
-                        navigator.xr.offerSession( xr_string, sessionOptions )
-                            .then( onSessionStarted )
-                            .catch( ( err ) => {
+                                console.warn(err);
 
-                                console.warn( err );
-
-                            } );
+                            });
 
                     }
 
@@ -105,16 +84,17 @@ class MyXRButton {
 
             };
 
-            if ( navigator.xr.offerSession !== undefined ) {
-                navigator.xr.offerSession( xr_string, sessionOptions )
-                    .then( onSessionStarted )
-                    .catch( ( err ) => {
-                        console.warn( err );
-                    } );
+            if (navigator.xr.offerSession !== undefined) {
+                navigator.xr.offerSession(xr_string, sessionOptions)
+                    .then(onSessionStarted)
+                    .catch((err) => {
+                        console.warn(err);
+                    });
 
             }
 
         }
+
         function disableButton() {
 
             button.style.display = '';
@@ -138,17 +118,17 @@ class MyXRButton {
 
         }
 
-        function showVRNotAllowed( exception ) {
+        function showVRNotAllowed(exception) {
 
             disableButton();
 
-            console.warn( 'Exception when trying to call xr.isSessionSupported', exception );
+            console.warn('Exception when trying to call xr.isSessionSupported', exception);
 
             button.textContent = btn_string + ' NOT ALLOWED';
 
         }
 
-        function stylizeElement( element ) {
+        function stylizeElement(element) {
 
             element.style.position = 'absolute';
             element.style.bottom = '20px';
@@ -165,34 +145,34 @@ class MyXRButton {
 
         }
 
-        if ( 'xr' in navigator ) {
+        if ('xr' in navigator) {
 
             button.id = 'MyXRButton';
             button.style.display = 'none';
 
-            stylizeElement( button );
+            stylizeElement(button);
 
-            navigator.xr.isSessionSupported( xr_string ).then( function ( supported ) {
+            navigator.xr.isSessionSupported(xr_string).then(function (supported) {
 
                 supported ? showEnterVR() : showWebXRNotFound();
 
-                if ( supported && MyXRButton.xrSessionIsGranted ) {
+                if (supported && MyXRButton.xrSessionIsGranted) {
 
                     button.click();
 
                 }
 
-            } ).catch( showVRNotAllowed );
+            }).catch(showVRNotAllowed);
 
-            return {button: button, referenceSpace: myrefspace, session: mySession };
+            return {button: button, referenceSpace: myrefspace, session: mySession};
 
         } else {
 
-            const message = document.createElement( 'a' );
+            const message = document.createElement('a');
 
-            if ( window.isSecureContext === false ) {
+            if (window.isSecureContext === false) {
 
-                message.href = document.location.href.replace( /^http:/, 'https:' );
+                message.href = document.location.href.replace(/^http:/, 'https:');
                 message.innerHTML = 'WEBXR NEEDS HTTPS'; // TODO Improve message
 
             } else {
@@ -206,7 +186,7 @@ class MyXRButton {
             message.style.width = '180px';
             message.style.textDecoration = 'none';
 
-            stylizeElement( message );
+            stylizeElement(message);
 
             return message;
 
@@ -216,17 +196,17 @@ class MyXRButton {
 
     static registerSessionGrantedListener() {
 
-        if ( typeof navigator !== 'undefined' && 'xr' in navigator ) {
+        if (typeof navigator !== 'undefined' && 'xr' in navigator) {
 
             // WebXRViewer (based on Firefox) has a bug where addEventListener
             // throws a silent exception and aborts execution entirely.
-            if ( /WebXRViewer\//i.test( navigator.userAgent ) ) return;
+            if (/WebXRViewer\//i.test(navigator.userAgent)) return;
 
-            navigator.xr.addEventListener( 'sessiongranted', () => {
+            navigator.xr.addEventListener('sessiongranted', () => {
 
                 MyXRButton.xrSessionIsGranted = true;
 
-            } );
+            });
 
         }
 
@@ -237,4 +217,4 @@ class MyXRButton {
 MyXRButton.xrSessionIsGranted = false;
 MyXRButton.registerSessionGrantedListener();
 
-export { MyXRButton };
+export {MyXRButton};

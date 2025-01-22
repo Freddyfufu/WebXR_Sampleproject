@@ -1,6 +1,6 @@
 import {MyXRButton} from "./MyXRButton.js";
 // import {ARButton} from 'three/examples/jsm/webxr/ARButton.js';
-
+import {ARButton} from "./MyARButton.js";
 import {renderer, scene, camera} from './scene.js';
 import {controller1, controller2, controllerGrip1, controllerGrip2, setupControllers} from './controllers.js';
 import * as ThreeMeshUI from "three-mesh-ui";
@@ -10,6 +10,7 @@ import {interactableObjects} from "./models";
 import {Text} from 'troika-three-text';
 import {io} from 'socket.io-client';
 import {highlightShaderMaterial, shaderHighlightActiveQuiz} from "./shaders";
+import {camera_y_offset} from "./global config";
 
 export let socket, mysession, referenceSpace, dolly, reticleGeometry, reticleMaterial, reticle, isVideoPlaying = false,
     playButtonMaterial, video, playTexture, playButtonGeometry, videoMesh, videoTexture, playButtonMesh, videoMaterial,
@@ -43,9 +44,10 @@ let question_container = null;
 let character_url = 'assets/Idle.fbx';
 
 const sessionOptions = {
-    requiredFeatures: ['local'], // Nutze 'local-floor' für Bodenbezug
+    requiredFeatures: ['local'],
     optionalFeatures: [
         'hand-tracking',
+
     ],
 };
 
@@ -126,23 +128,62 @@ window.addEventListener('blur', () => {
     // pauseAudio();
 });
 
-
 function onSessionStart(session) {
     mysession = session;
     console.log('Session started');
-
     setupControllers(scene, renderer);
     dolly = new THREE.Group();
+    const cameraHolder = new THREE.Group();
+    cameraHolder.position.set(0, camera_y_offset, 0); // Setze die Kamera-Höhe relativ zum Dolly
+    cameraHolder.add(camera); // Füge die Kamera in den Container ein
     dolly.add(controller1);
     dolly.add(controller2);
-    dolly.add(camera); // Füge die Kamera hinzu
+    dolly.add(cameraHolder); // Füge die Kamera hinzu
     dolly.add(controllerGrip1);
-    dolly.add(controllerGrip2)
+    dolly.add(controllerGrip2);
     // lade eigenen Avatar
-    spawnCharacterAt(socket.id, {x: 8, y: 0, z: 0}, true);
+        (async () => {
+            await spawnCharacterAt(socket.id, {x: 8, y: 2, z: 0}, true);
+            renderer.setAnimationLoop(render); // Wird nur aufgerufen, nachdem das Modell geladen wurde
+        })();
 
 
     socket.emit('player_added', {dolly: dolly});
+    reticleGeometry = new THREE.RingGeometry(0.1, 0.15, 32); // Ring für das Reticle
+    reticleMaterial = new THREE.MeshBasicMaterial({color: 0xffff00}); // Gelbes Material
+    reticle = new THREE.Mesh(reticleGeometry, reticleMaterial);
+    reticle.rotation.x = -Math.PI / 2; // Flach auf den Boden legen
+    reticle.visible = false; // Standardmäßig unsichtbar
+    scene.add(reticle);
+    scene.background = new THREE.Color(0x808080);
+    window.addEventListener('resize', onWindowResize, false);
+    function onWindowResize() {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+    createCinemaScreen();
+
+    const colliderGeometry = new THREE.PlaneGeometry(100, 100);
+    const colliderMaterial = new THREE.MeshBasicMaterial({visible: false}); // Unsichtbares Material
+    const groundCollider = new THREE.Mesh(colliderGeometry, colliderMaterial);
+
+    groundCollider.rotation.x = -Math.PI / 2; // Liegt flach auf dem Boden
+    scene.add(groundCollider);
+
+    const tempMatrix = new THREE.Matrix4();
+    tempMatrix.identity().extractRotation(controller2.matrixWorld);
+    highlightRaycaster.ray.origin.setFromMatrixPosition(controller2.matrixWorld);
+    highlightRaycaster.ray.direction.set(0, camera_y_offset, -1).applyMatrix4(tempMatrix);
+
+
+    // Rufe regelmäßig `sendPlayerPosition` auf, um die eigene Position zu senden
+    setInterval(sendCharacterState, 20);
+    setInterval(highlightRay, 100);
+
+}
+function createCinemaScreen() {
+    let cinemaScreenGroup = new THREE.Group();
     // Create a video element
     video = document.createElement('video');
     video.loop = true;
@@ -152,24 +193,14 @@ function onSessionStart(session) {
     video.playsInline = true;
     video.load();
     video.name = 'video';
-
-    reticleGeometry = new THREE.RingGeometry(0.1, 0.15, 32); // Ring für das Reticle
-    reticleMaterial = new THREE.MeshBasicMaterial({color: 0xffff00}); // Gelbes Material
-    reticle = new THREE.Mesh(reticleGeometry, reticleMaterial);
-    reticle.rotation.x = -Math.PI / 2; // Flach auf den Boden legen
-    reticle.visible = false; // Standardmäßig unsichtbar
-    scene.add(reticle);
-
-    scene.background = new THREE.Color(0x808080);
-
-    // Handle browser resize
-    window.addEventListener('resize', onWindowResize, false);
-
-    function onWindowResize() {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-    }
+    video.addEventListener('loadeddata', () => {
+        let aspect = video.videoWidth / video.videoHeight;
+        if (aspect < 2.0) {
+            videoMesh.scale.set(aspect * 1.1, 2.1, 1.0);
+        } else {
+            videoMesh.scale.set(2.1, 2.1 / aspect, 1.0);
+        }
+    });
 
     // Create a texture from the video
     videoTexture = new THREE.VideoTexture(video);
@@ -202,44 +233,18 @@ function onSessionStart(session) {
     videoGeometry = new THREE.PlaneGeometry(2.1, 1.1);
     videoMesh = new THREE.Mesh(videoGeometry, videoMaterial);
     videoMesh.name = 'videoMesh';
+    cinemaScreenGroup.add(videoMesh);
 
 // Position the video mesh
-    let videoMeshPosition = new THREE.Vector3(0.020, 1.723, -3.8);
+    let videoMeshPosition = new THREE.Vector3(15.2, 2, -1);
+    let rotation = new THREE.Euler(0, -1.6, 0, 'XYZ');
     videoMesh.position.set(videoMeshPosition.x, videoMeshPosition.y, videoMeshPosition.z);
-    scene.add(videoMesh);
-
-    playButtonMesh.position.set(videoMeshPosition.x, videoMeshPosition.y, videoMeshPosition.z + 0.1);
-    playButtonMesh.scale.set(0.5, 0.5, 0.5);
-    scene.add(playButtonMesh);
-    // Adjust the aspect ratio of the video plane after the video loads
-    video.addEventListener('loadeddata', () => {
-        let aspect = video.videoWidth / video.videoHeight;
-        if (aspect < 2.0) {
-            videoMesh.scale.set(aspect * 1.1, 2.1, 1.0);
-        } else {
-            videoMesh.scale.set(2.1, 2.1 / aspect, 1.0);
-        }
-    });
-
-
-    const colliderGeometry = new THREE.PlaneGeometry(100, 100);
-    const colliderMaterial = new THREE.MeshBasicMaterial({visible: false}); // Unsichtbares Material
-    const groundCollider = new THREE.Mesh(colliderGeometry, colliderMaterial);
-
-    groundCollider.rotation.x = -Math.PI / 2; // Liegt flach auf dem Boden
-    scene.add(groundCollider);
-
-    const tempMatrix = new THREE.Matrix4();
-    tempMatrix.identity().extractRotation(controller2.matrixWorld);
-    highlightRaycaster.ray.origin.setFromMatrixPosition(controller2.matrixWorld);
-    highlightRaycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
-
-    // Rufe regelmäßig `sendPlayerPosition` auf, um die eigene Position zu senden
-    // setInterval(sendCharacterState, 20);
-
-    setInterval(highlightRay, 100);
-
-    renderer.setAnimationLoop(render);
+    videoMesh.rotation.set(rotation.x, rotation.y, rotation.z);
+    playButtonMesh.position.set(videoMeshPosition.x -0.1, videoMeshPosition.y, videoMeshPosition.z);
+    // playButtonMesh.scale.set(0.5, 0.5, 0.5);
+    playButtonMesh.rotation.set(rotation.x, rotation.y, rotation.z);
+    cinemaScreenGroup.add(playButtonMesh);
+    scene.add(cinemaScreenGroup);
 }
 
 export function onSessionEnd() {
@@ -279,7 +284,7 @@ function onSelectEnd(event) {
             induceControllerRay(controller1);
         } else if (event.inputSource === controller2.userData.inputSource) { // rechts, kurzes drücken (teleportieren)
             teleport(controller2);
-
+            console.log('Rechts kurz gedrückt');
         }
 
     }
@@ -315,9 +320,7 @@ function playAudioAt(soundSource, audioFile) {
     });
 }
 
-
 resetQuestionContainer();
-
 
 function teleport(controller) {
     if (!controller) {
@@ -332,16 +335,16 @@ function teleport(controller) {
     const tempMatrix = new THREE.Matrix4();
     tempMatrix.identity().extractRotation(controller.matrixWorld);
     raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
-    raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
+    raycaster.ray.direction.set(0, camera_y_offset, -1).applyMatrix4(tempMatrix);
     // Prüfe auf Treffer
     const intersects = raycaster.intersectObjects(scene.children, true);
     if (intersects.length > 0) {
         line.material.color.set(0xffff00); // Strahl färben
         for (let i = 0; i < intersects.length; i++) {
             // FIXME: szenen mesh baken und nur danach prüfen
-            if (intersects[i].object.name === "ground") { // Wenn der Boden getroffen wurde ...
+            if (intersects[i].object.name === "MyGround" || intersects[i].object.name === "hall") { // Wenn der Boden getroffen wurde ...
                 reticle.position.copy(intersects[i].point);
-                reticle.position.y = 0.01; // Etwas über dem Boden
+                reticle.position.y = 1.61; // Etwas über dem Boden
                 reticle.visible = true; // Zeige das Reticle an
                 dolly.position.copy(reticle.position);
                 dolly.updateMatrixWorld(true);
@@ -455,7 +458,7 @@ function showAnimationFromPlayer(player_id, isCorrect) {
         player_dolly.remove(animationEffect);
     }, 3000);
     player_dolly.add(animationEffect);
-    animationEffect.position.set(0, 2, 0);
+    animationEffect.position.set(0, 1, 0);
     resetQuestionContainer();
 
 }
@@ -466,94 +469,109 @@ export function initXR() {
             .then((supported) => {
                 isVRAvailable = supported;
                 if (supported) {
-                    console.log('VR wird unterstützt');
-                    const btnDict = MyXRButton.createButton(renderer,"immersive-vr", "VR", sessionOptions, onSelectStart, onSelectEnd, onSessionStart, onSessionEnd);
+                    console.log('VR wird unterstützt')
+                    const btnDict = MyXRButton.createButton(renderer, "immersive-vr", "VR", sessionOptions, onSelectStart, onSelectEnd, onSessionStart, onSessionEnd);
                     document.body.appendChild(btnDict.button);
                     referenceSpace = btnDict.referenceSpace;
-                    if (!supported) {
-                        navigator.xr.isSessionSupported('immersive-ar').then((supported) => {
-                            if (supported) {
-                                console.log('AR wird unterstützt');
-                                isARAvailable = supported;
-                                const btnDict = MyXRButton.createButton(renderer,"immersive-ar", "AR", sessionOptions, onSelectStart, onSelectEnd, onSessionStart, onSessionEnd);
-                                document.body.appendChild(btnDict.button);
-                                referenceSpace = btnDict.referenceSpace;
-                            }
-                        });
-                    }
-                }
-                socket = io.connect('https://' + ipv4 + ':' + server_port);
-                socket.on('connect', () => {
-                    console.log('Verbunden mit dem WebSocket-Server!');
-                });
-                socket.on("start_quiz", (data) => {
-                    startQuiz(data);
-                });
-                socket.on("end_quiz", () => {
-                    // get last char of question_container.selectedOption.name
-                    let option = null;
-                    if (question_container.selectedOption) {
-                        option = parseInt(question_container.selectedOption.name.charAt(question_container.selectedOption.name.length - 1));
-                    }
-                    socket.emit('quiz_answer', {id: socket.id, option: option});
-                });
-                socket.on('eval_answer', (player_id, isCorrect) => {
-                    // console.log('Correct answer player:', player_id);
-                    showAnimationFromPlayer(player_id, isCorrect);
-                });
-                socket.on('add_player', (new_player, all_players) => {
-                    if (new_player.id === socket.id) return;
-                    console.log('Other players:', otherPlayers);
-
-                    // Erstelle einen neuen Avatar für den Spieler
-                    const otherPlayerGroup = new THREE.Group();
-                    let player_dolly = all_players.find(player => player.id === socket.id);
-                    // Lade das FBX-Modell für den Spieler
-                    if (!player_dolly) {
-                        console.error('Player not found');
-                        return;
-                    }
-                    spawnCharacterAt(new_player, {x: 0, y: 0, z: 0});
-                    // Speichere die Gruppe im `otherPlayers`-Objekt
-                });
-                socket.on("update_character", (data) => {
-                    if (otherPlayers[data.id] && data.id !== socket.id) {
-                        // console.log('Update position clientside NON SELF:', data);
-                        otherPlayers[data.id].position.copy(data.state.position);
-                        otherPlayers[data.id].rotation.set(data.state.rotation.x, data.state.rotation.y, data.state.rotation.z);
-                        otherPlayers[data.id].currentAnimationName = data.state.animation;
-                        // console.log('Update rotation clientside:', data.state.rotation);
-                        try {
-                            if (data.state.arms.leftArm) {
-                                otherPlayers[data.id].leftArm.rotation.fromArray(data.state.arms.leftArm);
-                            }
-                            if (data.state.arms.rightArm) {
-                                otherPlayers[data.id].rightArm.rotation.fromArray(data.state.arms.rightArm);
-                            }
-                        } catch (e) {
-                            console.log(e);
+                } else {
+                    navigator.xr.isSessionSupported('immersive-ar').then((supported) => {
+                        if (supported) {
+                            console.log('AR wird unterstützt');
+                            isARAvailable = supported;
+                            const btnDict = MyXRButton.createButton(renderer, "immersive-ar", "AR", sessionOptions, onSelectStart, onSelectEnd, onSessionStart, onSessionEnd);
+                            document.body.appendChild(btnDict.button);
+                            referenceSpace = btnDict.referenceSpace;
+                        } else {
+                            console.log('Weder AR noch VR wird unterstützt');
+                            navigator.xr.isSessionSupported('inline').then((supported) => {
+                                if (supported) {
+                                    console.log('Inline wird unterstützt');
+                                    isARAvailable = supported;
+                                    const btnDict = MyXRButton.createButton(renderer, "inline", "Inline", sessionOptions, onSelectStart, onSelectEnd, onSessionStart, onSessionEnd);
+                                    document.body.appendChild(btnDict.button);
+                                    referenceSpace = btnDict.referenceSpace;
+                                    console.log('Inline wird unterstützt');
+                                }
+                            })
                         }
-
-
-                    }
-                });
-                socket.on("remove_player", (socket_id) => {
-                    scene.remove(otherPlayers[socket_id]);
-                    delete otherPlayers[socket_id];
-                    console.log('Removed player:', socket_id);
-                });
-                socket.on('player_joined', (players) => {
-                    console.log('initialize_players:', players);
-                    players.forEach(player => {
-                        if (player.id === socket.id) return;
-                        spawnCharacterAt(player, {x: 0, y: 0, z: 0});
                     });
-                });
+                }
             });
+
+
     }
+    socket = io.connect('https://' + ipv4 + ':' + server_port);
+    socket.on('connect', () => {
+        console.log('Verbunden mit dem WebSocket-Server!');
+    });
+    socket.on("start_quiz", (data) => {
+        startQuiz(data);
+    });
+    socket.on("end_quiz", () => {
+        // get last char of question_container.selectedOption.name
+        let option = null;
+        if (question_container.selectedOption) {
+            option = parseInt(question_container.selectedOption.name.charAt(question_container.selectedOption.name.length - 1));
+        }
+        socket.emit('quiz_answer', {id: socket.id, option: option});
+    });
+    socket.on('eval_answer', (player_id, isCorrect) => {
+        // console.log('Correct answer player:', player_id);
+        showAnimationFromPlayer(player_id, isCorrect);
+    });
+    socket.on('add_player', (new_player, all_players) => {
+        if (new_player.id === socket.id) return;
+        console.log('Other players:', otherPlayers);
+
+        // Erstelle einen neuen Avatar für den Spieler
+        const otherPlayerGroup = new THREE.Group();
+        let player_dolly = all_players.find(player => player.id === socket.id);
+        // Lade das FBX-Modell für den Spieler
+        if (!player_dolly) {
+            console.error('Player not found');
+            return;
+        }
+        spawnCharacterAt(new_player, {x: 0, y: 0, z: 0});
+        // Speichere die Gruppe im `otherPlayers`-Objekt
+    });
+    socket.on("update_character", (data) => {
+        if (otherPlayers[data.id] && data.id !== socket.id) {
+            // console.log('Update position clientside NON SELF:', data);
+            otherPlayers[data.id].position.copy(data.state.position);
+            otherPlayers[data.id].rotation.set(data.state.rotation.x, data.state.rotation.y, data.state.rotation.z);
+            otherPlayers[data.id].currentAnimationName = data.state.animation;
+            // console.log('Update rotation clientside:', data.state.rotation);
+            try {
+                if (data.state.arms.leftArm) {
+                    otherPlayers[data.id].leftArm.rotation.fromArray(data.state.arms.leftArm);
+                }
+                if (data.state.arms.rightArm) {
+                    otherPlayers[data.id].rightArm.rotation.fromArray(data.state.arms.rightArm);
+                }
+            } catch (e) {
+                console.log(e);
+            }
+
+
+        }
+    });
+    socket.on("remove_player", (socket_id) => {
+        scene.remove(otherPlayers[socket_id]);
+        delete otherPlayers[socket_id];
+        console.log('Removed player:', socket_id);
+    });
+    socket.on('player_joined', (players) => {
+        console.log('initialize_players:', players);
+        players.forEach(player => {
+            if (player.id === socket.id) return;
+            spawnCharacterAt(player, {x: 0, y: 0, z: 0});
+        });
+    });
 }
 
-function spawnCharacterAt(player, position, isSelf = false) {
+
+
+async function spawnCharacterAt(player, position, isSelf = false) {
     let currentGroup;
     if (isSelf) {
         currentGroup = dolly;
@@ -561,26 +579,45 @@ function spawnCharacterAt(player, position, isSelf = false) {
         currentGroup = new THREE.Group();
     }
 
-    fbxLoader.load(character_url, (object) => {
-        object.scale.set(0.01, 0.01, 0.01);
-        object.rotation.set(0, Math.PI, 0);
-        let arms = findArms(object);
-        let leftArmBone = arms.leftArm;
-        let rightArmBone = arms.rightArm;
-        currentGroup.leftArm = leftArmBone;
-        currentGroup.rightArm = rightArmBone;
-        if (isSelf) {
-            object.visible = false;
-            mixer = new THREE.AnimationMixer(object);
-            const action = mixer.clipAction(object.animations[0]);
-            action.play();
-        }
-        currentGroup.add(object);
-        currentGroup.position.set(position.x, position.y, position.z);
-        scene.add(currentGroup);
+    // Wrap fbxLoader.load in a Promise
+    await new Promise((resolve, reject) => {
+        fbxLoader.load(
+            character_url,
+            (object) => {
+                object.scale.set(0.01, 0.01, 0.01);
+                object.rotation.set(0, Math.PI, 0);
+                object.position.set(0, -1.6, 0);
+
+                let arms = findArms(object);
+                let leftArmBone = arms.leftArm;
+                let rightArmBone = arms.rightArm;
+                currentGroup.leftArm = leftArmBone;
+                currentGroup.rightArm = rightArmBone;
+
+                if (isSelf) {
+                    object.visible = false;
+                    mixer = new THREE.AnimationMixer(object);
+                    const action = mixer.clipAction(object.animations[0]);
+                    action.play();
+                }
+
+                currentGroup.add(object);
+                currentGroup.position.set(position.x, position.y, position.z);
+                scene.add(currentGroup);
+
+                if (!isSelf) otherPlayers[player.id] = currentGroup;
+
+                resolve(true); // Resolve the Promise when loading is complete
+            },
+            undefined,
+            (error) => {
+                console.error('Error loading FBX model:', error);
+                reject(error); // Reject the Promise on error
+            }
+        );
     });
-    if (!isSelf) otherPlayers[player.id] = currentGroup;
 }
+
 
 function findArms(object) {
     const armBones = {
@@ -654,7 +691,7 @@ function handleHighlightedObject(currentObject) {
 function highlightRay() {
     tempMatrixHighlight.identity().extractRotation(controller1.matrixWorld);
     highlightRaycaster.ray.origin.setFromMatrixPosition(controller1.matrixWorld);
-    highlightRaycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrixHighlight);
+    highlightRaycaster.ray.direction.set(0, camera_y_offset, -1).applyMatrix4(tempMatrixHighlight);
     let proxyObjects = interactableObjects.map((x) => x);
     if (question_container) {
         proxyObjects = interactableObjects.concat(question_container);
@@ -793,7 +830,7 @@ function induceControllerRay(controller) {
     const tempMatrix = new THREE.Matrix4();
     tempMatrix.identity().extractRotation(controller.matrixWorld);
     raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
-    raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
+    raycaster.ray.direction.set(0, camera_y_offset, -1).applyMatrix4(tempMatrix);
     tryQuizButtonSelect();
     // Prüfe auf Treffer
     const intersects = raycaster.intersectObjects(scene.children, true);

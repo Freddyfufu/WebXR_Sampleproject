@@ -1,11 +1,4 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-// require('three/examples/jsm/webxr/VRButton.js');
-import {OBJLoader} from "three/examples/jsm/loaders/OBJLoader";
-import {MTLLoader} from "three/examples/jsm/loaders/MTLLoader";
-import {FBXLoader} from "three/examples/jsm/loaders/FBXLoader";
-import {DRACOLoader} from "three/examples/jsm/loaders/DRACOLoader";
-import { Text } from 'troika-three-text';
 import * as ThreeMeshUI from 'three-mesh-ui';
 import {VideoNode} from './js/render/nodes/video.js';
 import fontFamily from '../assets/three-mesh-ui/assets/Roboto-msdf.json';
@@ -16,8 +9,8 @@ import {loadModels} from "./models";
 
 initXR();
 
-
 loadModels();
+
 
 // Koordinatensystem hinzufügen
 const axesHelper = new THREE.AxesHelper(5); // 5 = Länge der Achsen
