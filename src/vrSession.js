@@ -187,7 +187,7 @@ function createCinemaScreen() {
     // Create a video element
     video = document.createElement('video');
     video.loop = true;
-    video.src = '/assets/media/video/gn.mkv';
+    video.src = '/assets/media/video/intro.mp4';
     video.crossOrigin = 'anonymous';
     video.muted = false;
     video.playsInline = true;
