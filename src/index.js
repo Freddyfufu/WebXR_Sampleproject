@@ -48,27 +48,6 @@ const text_welcome = new ThreeMeshUI.Text({
 
 });
 panel_welcome.add( text_welcome );
-
-const panel_enter_name = new ThreeMeshUI.Block({
-    width: 1.2,
-    height: 0.7,
-    padding: 0.2,
-    fontFamily: fontFamily,
-    fontTexture: fontTexture,
-});
-
-
-const text_enter_name = new ThreeMeshUI.Text({
-    content: "Benuztername eingeben",
-});
-
-panel_enter_name.add( text_enter_name );
-panel_enter_name.position.set(3, 3, -3);
-panel_enter_name.rotation.x = 20;
-panel_enter_name.rotation.y = 20;
-
-
-
 scene.add( panel_welcome );
 
 

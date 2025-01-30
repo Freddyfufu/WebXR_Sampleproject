@@ -11,6 +11,8 @@ import {Text} from 'troika-three-text';
 import {io} from 'socket.io-client';
 import {highlightShaderMaterial, shaderHighlightActiveQuiz} from "./shaders";
 import {camera_y_offset} from "./global config";
+import fontFamily from "../assets/three-mesh-ui/assets/Roboto-msdf.json";
+import fontTexture from "../assets/three-mesh-ui/assets/Roboto-msdf.png";
 
 export let socket, mysession, referenceSpace, dolly, reticleGeometry, reticleMaterial, reticle, isVideoPlaying = false,
     playButtonMaterial, video, playTexture, playButtonGeometry, videoMesh, videoTexture, playButtonMesh, videoMaterial,
@@ -43,6 +45,7 @@ let current_question = null;
 let question_container = null;
 let character_url = 'assets/Idle.fbx';
 
+
 const sessionOptions = {
     requiredFeatures: ['local'],
     optionalFeatures: [
@@ -50,6 +53,54 @@ const sessionOptions = {
 
     ],
 };
+let lastTime = performance.now();
+let frameCount = 0;
+let fps = 0;
+function calculateFPS() {
+    let now = performance.now();
+    frameCount++;
+
+    if (now - lastTime >= 1000) { // Alle 1000 ms aktualisieren
+        fps = frameCount;
+        frameCount = 0;
+        lastTime = now;
+        console.log(`FPS: ${fps}`);
+        initFPSText(fps);
+        try{
+        ThreeMeshUI.update();}
+        catch (e) {
+            console.log();
+        }
+    }
+
+}
+
+
+let panel_fps = new ThreeMeshUI.Block({
+    width: 1.2,
+    height: 0.7,
+    padding: 0.2,
+    fontFamily: fontFamily,
+    fontTexture: fontTexture,
+    backgroundColor:  new THREE.Color(0xFF0000),
+});
+let text_fps = new ThreeMeshUI.Text({
+    content: "FPS: " + fps,
+});
+panel_fps.position.set(12, 3, -7);
+panel_fps.add( text_fps );
+
+scene.add(panel_fps);
+
+
+function initFPSText(fps) {
+    panel_fps.remove(text_fps);
+    text_fps = new ThreeMeshUI.Text({
+        content: "FPS: " + fps,
+        fontSize: 0.15,
+    });
+    panel_fps.add(text_fps);
+}
 
 function resetQuestionContainer() {
     try {
@@ -136,6 +187,8 @@ function onSessionStart(session) {
     const cameraHolder = new THREE.Group();
     cameraHolder.position.set(0, camera_y_offset, 0); // Setze die Kamera-Höhe relativ zum Dolly
     cameraHolder.add(camera); // Füge die Kamera in den Container ein
+
+
     dolly.add(controller1);
     dolly.add(controller2);
     dolly.add(cameraHolder); // Füge die Kamera hinzu
@@ -163,6 +216,7 @@ function onSessionStart(session) {
         renderer.setSize(window.innerWidth, window.innerHeight);
     }
     createCinemaScreen();
+
 
     const colliderGeometry = new THREE.PlaneGeometry(100, 100);
     const colliderMaterial = new THREE.MeshBasicMaterial({visible: false}); // Unsichtbares Material
@@ -260,6 +314,8 @@ export function onSessionEnd() {
     scene.remove(dolly);
     otherPlayers = {};
     mysession = null;
+
+
 }
 
 export function onSelectStart(event) {
@@ -292,6 +348,8 @@ function onSelectEnd(event) {
     isLongPress = false; // Zurücksetzen
 }
 
+
+
 function playAudioAt(soundSource, audioFile) {
     // Create an AudioListener and attach it to the camera
     const listener = new THREE.AudioListener();
@@ -314,8 +372,7 @@ function playAudioAt(soundSource, audioFile) {
     audioLoader.load(audioFile, function (buffer) {
         sound.setBuffer(buffer);
         sound.setRefDistance(2);// Distance at which the volume starts decreasing
-        sound.setVolume(4)
-        ;
+        sound.setVolume(4);
         sound.play();
     });
 }
@@ -567,6 +624,8 @@ export function initXR() {
             spawnCharacterAt(player, {x: 0, y: 0, z: 0});
         });
     });
+
+
 }
 
 
@@ -765,6 +824,9 @@ function render(time) {
     ThreeMeshUI.update();
     renderer.xr.updateCamera(camera);
     renderer.render(scene, camera);
+
+
+    calculateFPS();
 }
 
 function moveCharacter() {

@@ -37,7 +37,6 @@ io.on('connection', (socket) => {
     const userAgent = socket.handshake.headers['user-agent'];
     console.log('Neuer Spieler verbunden mit User-Agent:', userAgent);
     socket.emit('player_joined', players);
-
     socket.on('player_added', (data) => {
         if (!data.dolly) {
             console.log('No dolly found.');
