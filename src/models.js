@@ -24,6 +24,7 @@ export function loadModels() {
         const model = gltf.scene; // Das geladene Modell
         model.position.set(7, 0, 0);
         scene.add(model); // Modell zur Szene hinzufügen
+        console.log('Hall loaded');
     }, undefined, function (error) {
         console.error('An error happened:', error);
     });
@@ -41,7 +42,7 @@ export function loadModels() {
         textMesh.color = 0x000000;
         model.myText = textMesh;
         scene.add(model); // Modell zur Szene hinzufügen
-
+        console.log('Car loaded');
         interactableObjects.push(model);
     }, undefined, function (error) {
         console.error('An error happened:', error);
@@ -62,7 +63,7 @@ export function loadModels() {
         textMesh.color = 0x000000;
         model.myText = textMesh;
         scene.add(model); // Modell zur Szene hinzufügen
-
+        console.log('Helmet loaded');
         interactableObjects.push(model);
     }, undefined, function (error) {
         console.error('An error happened:', error);
