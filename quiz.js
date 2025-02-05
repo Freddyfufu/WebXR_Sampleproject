@@ -14,6 +14,11 @@ export const quizQuestions =
             "question": "Welcher Kategorie ist dieser Helm am ehesten zuzuordnen?",
             "options": ["Mittelalter", "Science Fiction", "Fantasy", "Zukunft"],
             "correctAnswer": 2
+        },
+        "submarine": {
+            "question": "Welche Farbe hat das dargestellte U-Boot?",
+            "options": ["Rot", "Blau", "Gelb", "Schwarz"],
+            "correctAnswer": 2
         }
     };
 

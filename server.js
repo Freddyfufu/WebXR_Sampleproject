@@ -11,8 +11,8 @@ const quizQuestions = require('./quiz.js').quizQuestions;
 
 // Aktivieren von CORS für Express
 app.use(cors({
-    origin: ['https://' + ipv4 + ':8081'], // Erlaube nur Anfragen Web-Server
-    methods: ['GET', 'POST'],
+    origin: ['https://' + ipv4 + ':8081', '*'], // Erlaube nur Anfragen Web-Server
+    methods: ['GET', 'POST', 'OPTIONS'],
     credentials: true, // Damit Cookies und Sitzungen mit übertragen werden können
 }));
 
@@ -25,9 +25,19 @@ let players = [];
 let quiz_active = false;
 let quiz = {};
 
+class MoveableObject {
+    constructor() {
+        // {5, 0.5, 1}
+        this.moveableObjectPos = [5, 0.5, 1];
+        this.moveableObjectScale = [0.006, 0.006, 0.006];
+        this.moveableObjectRot = Math.PI / 2;
+    }
+}
+let moveableObject = new MoveableObject();
+
 const io = socketIo(server, {
     cors: {
-        origin: ['https://' + ipv4 + ':8081'], // Erlaube nur Anfragen von deinem Web-Server
+        origin: ['https://' + ipv4 + ':8081', "*"], // Erlaube nur Anfragen von deinem Web-Server
         methods: ['GET', 'POST'],
         credentials: true, // Damit Cookies und Sitzungen mit übertragen werden können
     }
@@ -36,6 +46,7 @@ const io = socketIo(server, {
 io.on('connection', (socket) => {
     const userAgent = socket.handshake.headers['user-agent'];
     console.log('Neuer Spieler verbunden mit User-Agent:', userAgent);
+    socket.emit("init_moveable_object", moveableObject);
     socket.emit('player_joined', players);
     socket.on('player_added', (data) => {
         if (!data.dolly) {
@@ -49,6 +60,15 @@ io.on('connection', (socket) => {
         socket.broadcast.emit("add_player", newPlayer, players);
         // only send to the new player to update the other players
     });
+    socket.on('update_moveable_object', (data) => {
+        moveableObject = data;
+        console.log('Moveable object updated serverside:', moveableObject);
+        io.emit('update_moveable_object', moveableObject);
+    });
+    socket.on("send_log", (log) => {
+        console.log('Log:', log);
+    });
+
     socket.on("player_removed", (socket_id) => {
         console.log('Player removed:', socket_id.socket_id);
         players = players.filter(player => player.id !== socket_id.socket_id);

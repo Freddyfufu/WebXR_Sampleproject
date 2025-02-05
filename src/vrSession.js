@@ -6,15 +6,19 @@ import {controller1, controller2, controllerGrip1, controllerGrip2, setupControl
 import * as ThreeMeshUI from "three-mesh-ui";
 import * as THREE from "three";
 import {FBXLoader} from "three/examples/jsm/loaders/FBXLoader";
-import {interactableObjects} from "./models";
+import {interactableObjects, moveableObjects} from "./models";
 import {Text} from 'troika-three-text';
 import {io} from 'socket.io-client';
 import {highlightShaderMaterial, shaderHighlightActiveQuiz} from "./shaders";
 import {camera_y_offset} from "./global config";
 import fontFamily from "../assets/three-mesh-ui/assets/Roboto-msdf.json";
 import fontTexture from "../assets/three-mesh-ui/assets/Roboto-msdf.png";
+import {colors} from "./global config";
+import {loadHighResSubmarine, loadHighResHelmet, loadGoat} from "./models";
+import {FPSLogger} from "./fpsLogger";
 
-export let socket, mysession, referenceSpace, dolly, reticleGeometry, reticleMaterial, reticle, isVideoPlaying = false,
+
+export let socket, mysession, referenceSpace, dolly, isVideoPlaying = false,
     playButtonMaterial, video, playTexture, playButtonGeometry, videoMesh, videoTexture, playButtonMesh, videoMaterial,
     videoGeometry;
 let mixer;
@@ -29,68 +33,52 @@ let highlightRaycaster = new THREE.Raycaster();
 const tempMatrixHighlight = new THREE.Matrix4();
 let currentHighlightMesh = null;
 let currentHighlightGroup = null;
-
-const colors = {
-    panelBack: 0x010101,
-    button: 0x888888,
-    hovered: 0xcccccc,
-    selected: 0x4b75c9,
-    wrong: 0xff0000,
-    correct: 0x00ff00
-};
-
 let isARAvailable = false;
 let isVRAvailable = false;
 let current_question = null;
 let question_container = null;
 let character_url = 'assets/Idle.fbx';
-
-
 const sessionOptions = {
     requiredFeatures: ['local'],
     optionalFeatures: [
         'hand-tracking',
-
     ],
 };
 let lastTime = performance.now();
 let frameCount = 0;
 let fps = 0;
-function calculateFPS() {
-    let now = performance.now();
-    frameCount++;
-
-    if (now - lastTime >= 1000) { // Alle 1000 ms aktualisieren
-        fps = frameCount;
-        frameCount = 0;
-        lastTime = now;
-        console.log(`FPS: ${fps}`);
-        initFPSText(fps);
-        try{
-        ThreeMeshUI.update();}
-        catch (e) {
-            console.log();
-        }
-    }
-
-}
-
-
+let moveableObject = null;
+let text_fps = new ThreeMeshUI.Text({
+    content: "FPS: " + fps,
+});
 let panel_fps = new ThreeMeshUI.Block({
     width: 1.2,
     height: 0.7,
     padding: 0.2,
     fontFamily: fontFamily,
     fontTexture: fontTexture,
-    backgroundColor:  new THREE.Color(0xFF0000),
-});
-let text_fps = new ThreeMeshUI.Text({
-    content: "FPS: " + fps,
+    backgroundColor: new THREE.Color(0xFF0000),
 });
 panel_fps.position.set(12, 3, -7);
-panel_fps.add( text_fps );
+panel_fps.add(text_fps);
 
-scene.add(panel_fps);
+
+function calculateFPS() {
+    let now = performance.now();
+    frameCount++;
+    if (now - lastTime >= 1000) { // Alle 1000 ms aktualisieren
+        fps = frameCount;
+        frameCount = 0;
+        lastTime = now;
+        // console.log(`FPS: ${fps}`);
+        initFPSText(fps);
+        try {
+            ThreeMeshUI.update();
+        } catch (e) {
+            console.log();
+        }
+    }
+}
 
 
 function initFPSText(fps) {
@@ -179,10 +167,79 @@ window.addEventListener('blur', () => {
     // pauseAudio();
 });
 
+let loadMeshButton = null;
+let panel_model = null;
+
+const fpsLogger = new FPSLogger();
+
+// setInterval(() => socket.emit("send_log", fpsLogger.getData()), 10000);
+// setTimeout(() => fpsLogger.saveToFile(), 20000);
+
+const loggers = []
+// Funktion an die ein Callback gebunden wird und ein Logging inittiert wird zur Messung
+let leaveSessionButton = null;
+let panel_exit = null;
+function startProcedure(callback, title = null, seconds=10) {
+    let newLogger = new FPSLogger(title);
+    loggers.push(newLogger);
+    newLogger.startLogging();
+    console.log('Start procedure');
+    // callback();
+    setTimeout(() =>  socket.emit("send_log", newLogger.getData()), seconds*1000);
+    setTimeout(() =>  loggers.pop(), seconds*1000);
+}
+function initLoadMesh() {
+    loadMeshButton = new ThreeMeshUI.Text({
+        content: "Lade hochauflösendes Modell",
+        fontSize: 0.1,
+        width: 2.4,
+        padding: 1,
+        backgroundColor: new THREE.Color(0x000000),
+    });
+    panel_model = new ThreeMeshUI.Block({
+        width: 1.2,
+        height: 0.7,
+        padding: 0.2,
+        fontFamily: fontFamily,
+        fontTexture: fontTexture,
+        backgroundColor: new THREE.Color(0x000000),
+    });
+    panel_model.position.set(14, 3, -7);
+    panel_model.add(loadMeshButton);
+    scene.add(panel_model);
+}
+function initExitButton() {
+    leaveSessionButton = new ThreeMeshUI.Text({
+        content: "Verlasse Sitzung",
+        fontSize: 0.1,
+        width: 2.4,
+        padding: 1,
+        backgroundColor: new THREE.Color(0x000000),
+    });
+    panel_exit = new ThreeMeshUI.Block({
+        width: 1.2,
+        height: 0.7,
+        padding: 0.2,
+        fontFamily: fontFamily,
+        fontTexture: fontTexture,
+        backgroundColor: new THREE.Color(0x000000),
+    });
+    panel_exit.position.set(10, 3, -7);
+    panel_exit.add(leaveSessionButton);
+    scene.add(panel_exit);
+}
+
 function onSessionStart(session) {
+    console.log('Session started onSessionStart');
+    fpsLogger.startLogging();
+    startProcedure(() => console.log("Dummy function"), "Anwendung laden", 15);
+
     mysession = session;
     console.log('Session started');
     setupControllers(scene, renderer);
+    initLoadMesh();
+    initExitButton();
+    scene.add(panel_fps);
     dolly = new THREE.Group();
     const cameraHolder = new THREE.Group();
     cameraHolder.position.set(0, camera_y_offset, 0); // Setze die Kamera-Höhe relativ zum Dolly
@@ -195,26 +252,22 @@ function onSessionStart(session) {
     dolly.add(controllerGrip1);
     dolly.add(controllerGrip2);
     // lade eigenen Avatar
-        (async () => {
-            await spawnCharacterAt(socket.id, {x: 8, y: 2, z: 0}, true);
-            renderer.setAnimationLoop(render); // Wird nur aufgerufen, nachdem das Modell geladen wurde
-        })();
-
+    (async () => {
+        await spawnCharacterAt(socket.id, {x: 8, y: 2, z: 0}, true);
+        renderer.setAnimationLoop(render); // Wird nur aufgerufen, nachdem das Modell geladen wurde
+    })();
 
     socket.emit('player_added', {dolly: dolly});
-    reticleGeometry = new THREE.RingGeometry(0.1, 0.15, 32); // Ring für das Reticle
-    reticleMaterial = new THREE.MeshBasicMaterial({color: 0xffff00}); // Gelbes Material
-    reticle = new THREE.Mesh(reticleGeometry, reticleMaterial);
-    reticle.rotation.x = -Math.PI / 2; // Flach auf den Boden legen
-    reticle.visible = false; // Standardmäßig unsichtbar
-    scene.add(reticle);
+
     scene.background = new THREE.Color(0x808080);
     window.addEventListener('resize', onWindowResize, false);
+
     function onWindowResize() {
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
         renderer.setSize(window.innerWidth, window.innerHeight);
     }
+
     createCinemaScreen();
 
 
@@ -236,12 +289,13 @@ function onSessionStart(session) {
     setInterval(highlightRay, 100);
 
 }
+
 function createCinemaScreen() {
     let cinemaScreenGroup = new THREE.Group();
     // Create a video element
     video = document.createElement('video');
     video.loop = true;
-    video.src = '/assets/media/video/intro.mp4';
+    video.src = '/assets/media/video/sample.mp4';
     video.crossOrigin = 'anonymous';
     video.muted = false;
     video.playsInline = true;
@@ -294,7 +348,7 @@ function createCinemaScreen() {
     let rotation = new THREE.Euler(0, -1.6, 0, 'XYZ');
     videoMesh.position.set(videoMeshPosition.x, videoMeshPosition.y, videoMeshPosition.z);
     videoMesh.rotation.set(rotation.x, rotation.y, rotation.z);
-    playButtonMesh.position.set(videoMeshPosition.x -0.1, videoMeshPosition.y, videoMeshPosition.z);
+    playButtonMesh.position.set(videoMeshPosition.x - 0.1, videoMeshPosition.y, videoMeshPosition.z);
     // playButtonMesh.scale.set(0.5, 0.5, 0.5);
     playButtonMesh.rotation.set(rotation.x, rotation.y, rotation.z);
     cinemaScreenGroup.add(playButtonMesh);
@@ -317,8 +371,9 @@ export function onSessionEnd() {
 
 
 }
-
+let inputTimestamp; // Zur Messung der Eingabelatenz
 export function onSelectStart(event) {
+    inputTimestamp = performance.now();
     // referenceSpace = VRButton.referenceSpace;
     pressTimer = setTimeout(() => {
         isLongPress = true;
@@ -332,7 +387,9 @@ function onSelectEnd(event) {
         // Langes Drücken: Markierung (rechts), Gegenstand bewegen (links)
         if (event.inputSource === controller2.userData.inputSource) {
             // rechts, lange drücken (Markierung)
-        } else if (event.inputSource === controller1.userData.inputSource) { // links, lange drücken (Gegenstand bewegen)
+        } else if (event.inputSource === controller1.userData.inputSource) {// links, lange drücken (Gegenstand bewegen)
+        induceControllerRay(controller1, true);
+        console.log('Long press links');
         }
         console.log('Long press');
     } else { // Kurzes Drücken: Verschiedene Aktionen (links), teleportieren (rechts)
@@ -347,7 +404,6 @@ function onSelectEnd(event) {
 
     isLongPress = false; // Zurücksetzen
 }
-
 
 
 function playAudioAt(soundSource, audioFile) {
@@ -400,15 +456,14 @@ function teleport(controller) {
         for (let i = 0; i < intersects.length; i++) {
             // FIXME: szenen mesh baken und nur danach prüfen
             if (intersects[i].object.name === "MyGround" || intersects[i].object.name === "hall") { // Wenn der Boden getroffen wurde ...
-                reticle.position.copy(intersects[i].point);
-                reticle.position.y = 1.61; // Etwas über dem Boden
-                reticle.visible = true; // Zeige das Reticle an
-                dolly.position.copy(reticle.position);
+                let point = intersects[i].point;
+                point.y += 2;
+                dolly.position.copy(point);
                 dolly.updateMatrixWorld(true);
             }
         }
     } else {
-        reticle.visible = false; // Verstecke das Reticle
+        line.material.color.set(0x00ff00); // Strahl färben
     }
 }
 
@@ -557,7 +612,22 @@ export function initXR() {
 
 
     }
-    socket = io.connect('https://' + ipv4 + ':' + server_port);
+    socket = io.connect('https://' + ipv4 + ':' + server_port, {
+        secure: true,
+        transports: ['websocket'],
+        rejectUnauthorized: false});
+    socket.on("init_moveable_object", (data) => {
+        moveableObject = data;
+        loadGoat(moveableObject.moveableObjectPos, moveableObject.moveableObjectScale, moveableObject.moveableObjectRot);
+        console.log('Moveable object loaded:', moveableObject);
+    });
+    socket.on('update_moveable_object', (data) => {
+        console.log('Moveable object updated CLIENTSIDE:', data);
+        let moveableObjectMesh = moveableObjects[0];
+        moveableObjectMesh.position.set(data.moveableObjectPos[0], data.moveableObjectPos[1], data.moveableObjectPos[2]);
+        // moveableObjectMesh.scale.set(data.moveableObjectScale[0], data.moveableObjectScale[1], data.moveableObjectScale[2]);
+        // moveableObjectMesh.rotation.y = data.moveableObjectRot;
+    });
     socket.on('connect', () => {
         console.log('Verbunden mit dem WebSocket-Server!');
     });
@@ -573,7 +643,6 @@ export function initXR() {
         socket.emit('quiz_answer', {id: socket.id, option: option});
     });
     socket.on('eval_answer', (player_id, isCorrect) => {
-        // console.log('Correct answer player:', player_id);
         showAnimationFromPlayer(player_id, isCorrect);
     });
     socket.on('add_player', (new_player, all_players) => {
@@ -593,11 +662,9 @@ export function initXR() {
     });
     socket.on("update_character", (data) => {
         if (otherPlayers[data.id] && data.id !== socket.id) {
-            // console.log('Update position clientside NON SELF:', data);
             otherPlayers[data.id].position.copy(data.state.position);
             otherPlayers[data.id].rotation.set(data.state.rotation.x, data.state.rotation.y, data.state.rotation.z);
             otherPlayers[data.id].currentAnimationName = data.state.animation;
-            // console.log('Update rotation clientside:', data.state.rotation);
             try {
                 if (data.state.arms.leftArm) {
                     otherPlayers[data.id].leftArm.rotation.fromArray(data.state.arms.leftArm);
@@ -627,8 +694,6 @@ export function initXR() {
 
 
 }
-
-
 
 async function spawnCharacterAt(player, position, isSelf = false) {
     let currentGroup;
@@ -676,7 +741,6 @@ async function spawnCharacterAt(player, position, isSelf = false) {
         );
     });
 }
-
 
 function findArms(object) {
     const armBones = {
@@ -765,8 +829,12 @@ function highlightRay() {
 
             while (currentObject) {
                 if (!currentHighlightGroup) {
-                    if (currentObject.name === "lambo" || currentObject.name === "helmet") {
+                    if (currentObject.name === "lambo" || currentObject.name === "helmet" || currentObject.name === "submarine" ) {
                         handleHighlightedObject(currentObject);
+                        return;
+                    }
+                    if (currentObject.name === "moveableObject") {
+                        console.log('Moveable object hovered');
                         return;
                     }
                 }
@@ -817,16 +885,26 @@ function button_hover(currentObject) {
 }
 
 function render(time) {
+    // fpsLogger.updateFPS();
+    if (inputTimestamp) {
+        console.log('Eingabelatenz messen', inputTimestamp," | ", performance.now());
+        let latency = performance.now() - inputTimestamp;
+        console.log(`Eingabelatenz: ${latency} ms`);
+
+        console.log(`Eingabelatenz: ${latency.toFixed(9)} ms`);
+        inputTimestamp = null; // Zurücksetzen nach Messung
+    }
+    loggers.forEach((logger) => {
+        logger.updateFPS();
+    });
     if (mixer) mixer.update(0.016); // 16ms für eine 60FPS-Rate
     updateArms(dolly.leftArm, dolly.rightArm);
     moveCharacter();
     sendCharacterState();
+    calculateFPS();
     ThreeMeshUI.update();
     renderer.xr.updateCamera(camera);
     renderer.render(scene, camera);
-
-
-    calculateFPS();
 }
 
 function moveCharacter() {
@@ -864,7 +942,7 @@ function moveCharacter() {
 }
 
 
-function induceControllerRay(controller) {
+function induceControllerRay(controller, isMoveableObject = false) {
     if (currentHighlightGroup) {
         switch (currentHighlightGroup.currentObject) {
             case "lambo":
@@ -873,6 +951,10 @@ function induceControllerRay(controller) {
                 break;
             case "helmet":
                 console.log("Requesting quiz for helmet");
+                socket.emit('request_quiz', {player_id: socket.id, exponat: currentHighlightGroup.currentObject});
+                break;
+            case "submarine":
+                console.log("Requesting quiz for submarine");
                 socket.emit('request_quiz', {player_id: socket.id, exponat: currentHighlightGroup.currentObject});
                 break;
             default:
@@ -898,13 +980,38 @@ function induceControllerRay(controller) {
     const intersects = raycaster.intersectObjects(scene.children, true);
     console.log("intersects:", intersects);
     if (intersects.length > 0) {
-
         line.material.color.set(0xffff00); // Strahl färben
         for (let i = 0; i < intersects.length; i++) {
             let currentObject = intersects[i].object;
             while (currentObject.parent) {
+                if (currentObject === panel_model) {
+                    console.log('Panel model getroffen');
+                    // lade hochauflösendes Modell
+                    // startProcedure(loadHighResSubmarine, "Submarine laden", 25);
+                    // loadHighResSubmarine();
+                    startProcedure(loadHighResHelmet, "Helmet laden", 25);
+                    loadHighResHelmet();
+                    break;
+                }if (currentObject === panel_exit) {
+                    // beende webxr sitzung
+                    mysession.end();
+                    onSessionEnd();
+                    break;
+                }
                 if (currentObject === videoMesh) {
                     toggleVideoPlayback(); // Video abspielen oder pausieren
+                }
+                if (isMoveableObject) {
+                    // news position
+                    console.log('Moveable object getroffen');
+                    let newPos = intersects[i].point;
+                    newPos.y = 1;
+                    console.log('New position mov obje:', newPos);
+                    moveableObject.moveableObjectPos = [newPos.x, 0.3, newPos.z];
+                    // moveableObject.moveableObjectPos = [6, 0.5, 1];
+                    // moveableObject.moveableObjectRot = currentObject.rotation;
+                    // moveableObject.moveableObjectScale = currentObject.scale;
+                    socket.emit('update_moveable_object', moveableObject);
                 }
                 currentObject = currentObject.parent;
             }
@@ -935,6 +1042,7 @@ function tryQuizButtonSelect() {
 
 function toggleVideoPlayback() {
     if (!isVideoPlaying) {
+        startProcedure(() => console.log("Dummy function"), "Video abspielen", 15);
         video.play();
         playButtonMesh.visible = false;
         isVideoPlaying = true;
