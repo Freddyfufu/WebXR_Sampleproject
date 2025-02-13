@@ -2,10 +2,11 @@ const https = require('https');
 const fs = require('fs');
 const express = require('express');
 const socketIo = require('socket.io');
-const cors = require('cors'); // Importiere das CORS-Paket
-
+const cors = require('cors');
+const ipv4 = require('./src/global_config').ipv4;
 const app = express();
-const ipv4 = "192.168.137.1";
+
+
 //
 const quizQuestions = require('./quiz.js').quizQuestions;
 
@@ -42,6 +43,7 @@ const io = socketIo(server, {
         credentials: true, // Damit Cookies und Sitzungen mit übertragen werden können
     }
 });
+
 
 io.on('connection', (socket) => {
     const userAgent = socket.handshake.headers['user-agent'];
@@ -118,6 +120,6 @@ io.on('connection', (socket) => {
     });
 });
 
-server.listen(3000, ipv4, () => {
+server.listen(3000, "0.0.0.0", () => {
     console.log('WebSocket server is running on https://' + ipv4 + ':3000');
 });

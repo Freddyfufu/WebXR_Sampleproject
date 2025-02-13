@@ -1,3 +1,5 @@
+// Beispielanwendung WebXR im Rahmen der Bachelorarbeit von Freddy Oexemann
+
 export class FPSLogger {
     constructor(title) {
         this.title = title;
@@ -18,6 +20,7 @@ export class FPSLogger {
                 this.frameCount = 0;
                 this.lastFrameTime = now;
                 this.logFPS(fps);
+                console.log("FPSLogger updateFPS called", fps);
             }
         };
 

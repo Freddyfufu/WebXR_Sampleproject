@@ -1,32 +1,32 @@
+// Beispielanwendung WebXR im Rahmen der Bachelorarbeit von Freddy Oexemann
+
 import {MyXRButton} from "./MyXRButton.js";
-// import {ARButton} from 'three/examples/jsm/webxr/ARButton.js';
-import {ARButton} from "./MyARButton.js";
 import {renderer, scene, camera} from './scene.js';
 import {controller1, controller2, controllerGrip1, controllerGrip2, setupControllers} from './controllers.js';
 import * as ThreeMeshUI from "three-mesh-ui";
 import * as THREE from "three";
 import {FBXLoader} from "three/examples/jsm/loaders/FBXLoader";
 import {interactableObjects, moveableObjects} from "./models";
-import {Text} from 'troika-three-text';
 import {io} from 'socket.io-client';
 import {highlightShaderMaterial, shaderHighlightActiveQuiz} from "./shaders";
-import {camera_y_offset} from "./global config";
+import {camera_y_offset} from "./global_config";
 import fontFamily from "../assets/three-mesh-ui/assets/Roboto-msdf.json";
 import fontTexture from "../assets/three-mesh-ui/assets/Roboto-msdf.png";
-import {colors} from "./global config";
-import {loadHighResSubmarine, loadHighResHelmet, loadGoat} from "./models";
+import {colors} from "./global_config";
+import {loadHighResHelmet, loadGoat} from "./models";
 import {FPSLogger} from "./fpsLogger";
-
+import {ipv4} from "./global_config";
 
 export let socket, mysession, referenceSpace, dolly, isVideoPlaying = false,
     playButtonMaterial, video, playTexture, playButtonGeometry, videoMesh, videoTexture, playButtonMesh, videoMaterial,
     videoGeometry;
 let mixer;
+
+
 let otherPlayers = {};
 let isLongPress = false;
 let pressTimer = null;
 const fbxLoader = new FBXLoader();
-const ipv4 = "192.168.137.1";
 const server_port = 3000;
 let raycaster = new THREE.Raycaster();
 let highlightRaycaster = new THREE.Raycaster();
@@ -48,6 +48,7 @@ let lastTime = performance.now();
 let frameCount = 0;
 let fps = 0;
 let moveableObject = null;
+let isMobile = false;
 let text_fps = new ThreeMeshUI.Text({
     content: "FPS: " + fps,
 });
@@ -108,7 +109,6 @@ function resetQuestionContainer() {
             fontFamily: './assets/fonts/Roboto-msdf.json',
             fontTexture: './assets/fonts/Roboto-msdf.png',
             backgroundColor: new THREE.Color(colors.panelBack),
-            // backgroundOpacity: 0.5,
         });
         question_container.name = 'question_container';
         question_container.position.set(8, 3, -7); // Set the container's world position
@@ -162,9 +162,6 @@ function updateArms() {
 
 window.addEventListener('blur', () => {
     console.log('Window lost focus');
-    // As a general rule you should mute any sounds your page is playing
-    // whenever the page loses focus.
-    // pauseAudio();
 });
 
 let loadMeshButton = null;
@@ -172,22 +169,21 @@ let panel_model = null;
 
 const fpsLogger = new FPSLogger();
 
-// setInterval(() => socket.emit("send_log", fpsLogger.getData()), 10000);
-// setTimeout(() => fpsLogger.saveToFile(), 20000);
-
 const loggers = []
 // Funktion an die ein Callback gebunden wird und ein Logging inittiert wird zur Messung
 let leaveSessionButton = null;
 let panel_exit = null;
-function startProcedure(callback, title = null, seconds=10) {
+
+function startProcedure(callback, title = null, seconds = 10) {
     let newLogger = new FPSLogger(title);
     loggers.push(newLogger);
     newLogger.startLogging();
     console.log('Start procedure');
     // callback();
-    setTimeout(() =>  socket.emit("send_log", newLogger.getData()), seconds*1000);
-    setTimeout(() =>  loggers.pop(), seconds*1000);
+    setTimeout(() => socket.emit("send_log", newLogger.getData()), seconds * 1000);
+    setTimeout(() => loggers.pop(), seconds * 1000);
 }
+
 function initLoadMesh() {
     loadMeshButton = new ThreeMeshUI.Text({
         content: "Lade hochauflösendes Modell",
@@ -208,6 +204,7 @@ function initLoadMesh() {
     panel_model.add(loadMeshButton);
     scene.add(panel_model);
 }
+
 function initExitButton() {
     leaveSessionButton = new ThreeMeshUI.Text({
         content: "Verlasse Sitzung",
@@ -232,13 +229,14 @@ function initExitButton() {
 function onSessionStart(session) {
     console.log('Session started onSessionStart');
     fpsLogger.startLogging();
-    startProcedure(() => console.log("Dummy function"), "Anwendung laden", 15);
+    // startProcedure(() => console.log("Dummy function"), "Anwendung laden", 15);
 
     mysession = session;
     console.log('Session started');
     setupControllers(scene, renderer);
     initLoadMesh();
     initExitButton();
+    isMobile = isMobileByScreenSize();
     scene.add(panel_fps);
     dolly = new THREE.Group();
     const cameraHolder = new THREE.Group();
@@ -349,7 +347,6 @@ function createCinemaScreen() {
     videoMesh.position.set(videoMeshPosition.x, videoMeshPosition.y, videoMeshPosition.z);
     videoMesh.rotation.set(rotation.x, rotation.y, rotation.z);
     playButtonMesh.position.set(videoMeshPosition.x - 0.1, videoMeshPosition.y, videoMeshPosition.z);
-    // playButtonMesh.scale.set(0.5, 0.5, 0.5);
     playButtonMesh.rotation.set(rotation.x, rotation.y, rotation.z);
     cinemaScreenGroup.add(playButtonMesh);
     scene.add(cinemaScreenGroup);
@@ -371,10 +368,10 @@ export function onSessionEnd() {
 
 
 }
+
 let inputTimestamp; // Zur Messung der Eingabelatenz
 export function onSelectStart(event) {
     inputTimestamp = performance.now();
-    // referenceSpace = VRButton.referenceSpace;
     pressTimer = setTimeout(() => {
         isLongPress = true;
     }, 1000); // 1 Sekunde für langes Drücken
@@ -388,13 +385,16 @@ function onSelectEnd(event) {
         if (event.inputSource === controller2.userData.inputSource) {
             // rechts, lange drücken (Markierung)
         } else if (event.inputSource === controller1.userData.inputSource) {// links, lange drücken (Gegenstand bewegen)
-        induceControllerRay(controller1, true);
-        console.log('Long press links');
+            induceControllerRay(controller1, true);
+            console.log('Long press links');
         }
         console.log('Long press');
     } else { // Kurzes Drücken: Verschiedene Aktionen (links), teleportieren (rechts)
         if (event.inputSource === controller1.userData.inputSource) { // links, kurzes drücken
             induceControllerRay(controller1);
+            if (isMobile) {
+                console.log('Mobile device right');
+            }
         } else if (event.inputSource === controller2.userData.inputSource) { // rechts, kurzes drücken (teleportieren)
             teleport(controller2);
             console.log('Rechts kurz gedrückt');
@@ -575,6 +575,8 @@ function showAnimationFromPlayer(player_id, isCorrect) {
 
 }
 
+let btnDict;
+
 export function initXR() {
     if (navigator.xr) {
         navigator.xr.isSessionSupported('immersive-vr')
@@ -599,7 +601,7 @@ export function initXR() {
                                 if (supported) {
                                     console.log('Inline wird unterstützt');
                                     isARAvailable = supported;
-                                    const btnDict = MyXRButton.createButton(renderer, "inline", "Inline", sessionOptions, onSelectStart, onSelectEnd, onSessionStart, onSessionEnd);
+                                    btnDict = MyXRButton.createButton(renderer, "inline", "Inline", sessionOptions, onSelectStart, onSelectEnd, onSessionStart, onSessionEnd);
                                     document.body.appendChild(btnDict.button);
                                     referenceSpace = btnDict.referenceSpace;
                                     console.log('Inline wird unterstützt');
@@ -615,7 +617,8 @@ export function initXR() {
     socket = io.connect('https://' + ipv4 + ':' + server_port, {
         secure: true,
         transports: ['websocket'],
-        rejectUnauthorized: false});
+        rejectUnauthorized: false
+    });
     socket.on("init_moveable_object", (data) => {
         moveableObject = data;
         loadGoat(moveableObject.moveableObjectPos, moveableObject.moveableObjectScale, moveableObject.moveableObjectRot);
@@ -625,8 +628,6 @@ export function initXR() {
         console.log('Moveable object updated CLIENTSIDE:', data);
         let moveableObjectMesh = moveableObjects[0];
         moveableObjectMesh.position.set(data.moveableObjectPos[0], data.moveableObjectPos[1], data.moveableObjectPos[2]);
-        // moveableObjectMesh.scale.set(data.moveableObjectScale[0], data.moveableObjectScale[1], data.moveableObjectScale[2]);
-        // moveableObjectMesh.rotation.y = data.moveableObjectRot;
     });
     socket.on('connect', () => {
         console.log('Verbunden mit dem WebSocket-Server!');
@@ -829,7 +830,7 @@ function highlightRay() {
 
             while (currentObject) {
                 if (!currentHighlightGroup) {
-                    if (currentObject.name === "lambo" || currentObject.name === "helmet" || currentObject.name === "submarine" ) {
+                    if (currentObject.name === "lambo" || currentObject.name === "helmet" || currentObject.name === "submarine") {
                         handleHighlightedObject(currentObject);
                         return;
                     }
@@ -885,9 +886,8 @@ function button_hover(currentObject) {
 }
 
 function render(time) {
-    // fpsLogger.updateFPS();
     if (inputTimestamp) {
-        console.log('Eingabelatenz messen', inputTimestamp," | ", performance.now());
+        console.log('Eingabelatenz messen', inputTimestamp, " | ", performance.now());
         let latency = performance.now() - inputTimestamp;
         console.log(`Eingabelatenz: ${latency} ms`);
 
@@ -905,6 +905,10 @@ function render(time) {
     ThreeMeshUI.update();
     renderer.xr.updateCamera(camera);
     renderer.render(scene, camera);
+}
+
+function isMobileByScreenSize() {
+    return window.innerWidth <= 800 && window.innerHeight <= 1200;
 }
 
 function moveCharacter() {
@@ -937,7 +941,7 @@ function moveCharacter() {
             dolly.rotateY(0.05);
         }
     } catch (e) {
-        console.log(e);
+        console.log("");
     }
 }
 
@@ -987,12 +991,11 @@ function induceControllerRay(controller, isMoveableObject = false) {
                 if (currentObject === panel_model) {
                     console.log('Panel model getroffen');
                     // lade hochauflösendes Modell
-                    // startProcedure(loadHighResSubmarine, "Submarine laden", 25);
-                    // loadHighResSubmarine();
                     startProcedure(loadHighResHelmet, "Helmet laden", 25);
                     loadHighResHelmet();
                     break;
-                }if (currentObject === panel_exit) {
+                }
+                if (currentObject === panel_exit) {
                     // beende webxr sitzung
                     mysession.end();
                     onSessionEnd();
@@ -1008,9 +1011,6 @@ function induceControllerRay(controller, isMoveableObject = false) {
                     newPos.y = 1;
                     console.log('New position mov obje:', newPos);
                     moveableObject.moveableObjectPos = [newPos.x, 0.3, newPos.z];
-                    // moveableObject.moveableObjectPos = [6, 0.5, 1];
-                    // moveableObject.moveableObjectRot = currentObject.rotation;
-                    // moveableObject.moveableObjectScale = currentObject.scale;
                     socket.emit('update_moveable_object', moveableObject);
                 }
                 currentObject = currentObject.parent;

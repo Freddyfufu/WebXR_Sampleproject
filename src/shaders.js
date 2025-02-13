@@ -1,8 +1,10 @@
+// Beispielanwendung WebXR im Rahmen der Bachelorarbeit von Freddy Oexemann
+
 import * as THREE from "three";
 
-export const shaderHighlightActiveQuiz  = new THREE.ShaderMaterial({
+export const shaderHighlightActiveQuiz = new THREE.ShaderMaterial({
     uniforms: {
-        glowColor: { value: new THREE.Color(0x00ff00) }, // Highlight-Farbe
+        glowColor: {value: new THREE.Color(0x00ff00)}, // Highlight-Farbe
     },
     vertexShader: `
         varying vec3 vNormal;
@@ -25,8 +27,8 @@ export const shaderHighlightActiveQuiz  = new THREE.ShaderMaterial({
 
 export const highlightShaderMaterial = new THREE.ShaderMaterial({
     uniforms: {
-        glowColor: { value: new THREE.Color(0xff0000) }, // Startfarbe
-        time: { value: 0 }, // Zeit für die Animation
+        glowColor: {value: new THREE.Color(0xff0000)}, // Startfarbe
+        time: {value: 0}, // Zeit für die Animation
     },
     vertexShader: `
         varying vec3 vNormal;

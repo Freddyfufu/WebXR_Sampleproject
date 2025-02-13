@@ -1,17 +1,17 @@
+// Beispielanwendung WebXR im Rahmen der Bachelorarbeit von Freddy Oexemann
 
 
+// Modelle von sketchfab.com
 
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {DRACOLoader} from "three/examples/jsm/loaders/DRACOLoader";
-import { scene, camera, renderer } from './scene.js';
-import {Object3D} from "three";
-import * as ThreeMeshUI from "three-mesh-ui";
-import { Text } from 'troika-three-text';
-import fontFamily from "../assets/three-mesh-ui/assets/Roboto-msdf.json";
-import fontTexture from "../assets/three-mesh-ui/assets/Roboto-msdf.png";
+import {scene} from './scene.js';
+import {Text} from 'troika-three-text';
 
 export let interactableObjects = [];
 export let moveableObjects = [];
+
 export function loadModels() {
 
 // DracoLoader erstellen und konfigurieren
@@ -33,6 +33,7 @@ export function loadModels() {
         model.name = 'lambo';
         model.position.set(5, 0.5, -5);
         // model.scale.set(3, 3, 3);
+
         model.rotation.y = Math.PI / 3;
         const textMesh = new Text();
         textMesh.text = 'Quiz starten!';
@@ -48,10 +49,9 @@ export function loadModels() {
     // loadGoat();
     // loadHighResHelmet();
     // loadHighResSubmarine();
-
-
 }
-export function loadGoat(pos, scale, rot){
+
+export function loadGoat(pos, scale, rot) {
     console.log('Loading MOVEABLE OBJECT');
     const dracoLoader = new DRACOLoader();
     dracoLoader.setDecoderPath('./assets/libs/draco/'); // Pfad zum Draco-Ordner setzen
@@ -78,7 +78,8 @@ export function loadGoat(pos, scale, rot){
     moveableObjects.forEach(obj => obj.updateMatrixWorld());
     interactableObjects.forEach(obj => obj.updateMatrixWorld());
 }
-export function loadHighResSubmarine(){
+
+export function loadHighResSubmarine() {
     console.log('Loading high res submarine');
     const dracoLoader = new DRACOLoader();
     dracoLoader.setDecoderPath('./assets/libs/draco/'); // Pfad zum Draco-Ordner setzen
@@ -105,7 +106,7 @@ export function loadHighResSubmarine(){
 
 }
 
-export function loadHighResHelmet(){
+export function loadHighResHelmet() {
     console.log('Loading high res helmet');
     const dracoLoader = new DRACOLoader();
     dracoLoader.setDecoderPath('./assets/libs/draco/'); // Pfad zum Draco-Ordner setzen

@@ -1,3 +1,5 @@
+// Beispielanwendung WebXR im Rahmen der Bachelorarbeit von Freddy Oexemann
+
 import * as THREE from 'three';
 import * as ThreeMeshUI from 'three-mesh-ui';
 import {VideoNode} from './js/render/nodes/video.js';
@@ -12,7 +14,7 @@ initXR();
 loadModels();
 
 
-// Koordinatensystem hinzufügen
+
 const axesHelper = new THREE.AxesHelper(5); // 5 = Länge der Achsen
 scene.add(axesHelper);
 

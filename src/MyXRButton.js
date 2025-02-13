@@ -1,7 +1,9 @@
+// Beispielanwendung WebXR im Rahmen der Bachelorarbeit von Freddy Oexemann
+
 class MyXRButton {
     static createButton(renderer, xr_string, btn_string, sessionInit = {}, cbOnSelectStart, cbOnSelectEnd, cbOnSessionStart, cbOnSessionEnd) {
-        const button = document.createElement('button');
         let myrefspace = null;
+        const button = document.createElement('button');
         let mySession = null;
 
         function showEnterVR( /*device*/) {

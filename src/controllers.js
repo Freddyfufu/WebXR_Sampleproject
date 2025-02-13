@@ -1,10 +1,9 @@
-// controllers.js
+// Beispielanwendung WebXR im Rahmen der Bachelorarbeit von Freddy Oexemann
+
 import * as THREE from 'three';
 import { XRControllerModelFactory } from 'three/examples/jsm/webxr/XRControllerModelFactory.js';
-import {camera_y_offset} from "./global config";
 
 export let controller1, controller2, controllerGrip1, controllerGrip2, inputSource1, inputSource2;
-
 
 
 export function setupControllers(scene, renderer) {
