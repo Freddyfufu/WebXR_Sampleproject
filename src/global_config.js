@@ -9,5 +9,5 @@ export const colors = {
     wrong: 0xff0000,
     correct: 0x00ff00
 };
-export const ipv4 = "10.0.9.32"; // Hier deine IPv4-Adresse eintragen
+export const ipv4 = "localhost"; // Hier deine IPv4-Adresse eintragen
 
